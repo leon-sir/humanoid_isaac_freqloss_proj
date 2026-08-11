@@ -7,17 +7,16 @@ version = "0.1.0"
 category = "isaaclab"
 readme  = "README.md"
 
-title = "Extension Template"
-author = "Isaac Lab Project Developers"
-maintainer = "Isaac Lab Project Developers"
-description="Extension Template for Isaac Lab"
-repository = "https://github.com/isaac-sim/IsaacLab.git"
-keywords = ["extension", "template", "isaaclab"]
+title = "Humanoid Isaac Frequency Locomotion"
+author = "Zheng Pan"
+maintainer = "Zheng Pan"
+description = "Frequency-based MDP designs for 12-DoF humanoid locomotion"
+repository = ""
+keywords = ["isaaclab", "humanoid", "locomotion", "frequency"]
 
 [dependencies]
 "isaaclab" = {}
 "isaaclab_assets" = {}
-"isaaclab_mimic" = {}
 "isaaclab_rl" = {}
 "isaaclab_tasks" = {}
 # NOTE: Add additional dependencies here

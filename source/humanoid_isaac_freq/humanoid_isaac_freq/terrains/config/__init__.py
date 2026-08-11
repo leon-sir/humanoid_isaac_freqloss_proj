@@ -1,0 +1,3 @@
+from .flat import PERLIN_FLAT_TERRAINS_CFG
+
+__all__ = ["PERLIN_FLAT_TERRAINS_CFG"]

@@ -1,135 +1,79 @@
-# Template for Isaac Lab Projects
+# Humanoid Isaac Frequency Locomotion
 
-## Overview
+This project develops frequency-based MDP reward designs for 12-DoF YMBOY locomotion on mildly uneven Perlin-generated flat terrain. It targets Isaac Lab 2.2.3 and uses the native RSL-RL PPO implementation.
 
-This project/repository serves as a template for building projects or extensions based on Isaac Lab.
-It allows you to develop in an isolated environment, outside of the core Isaac Lab repository.
+## Task
 
-**Key Features:**
+The project registers two corresponding manager-based tasks:
 
-- `Isolation` Work outside the core Isaac Lab repository, ensuring that your development efforts remain self-contained.
-- `Flexibility` This template is set up to allow your code to be run as an extension in Omniverse.
+```text
+FreqLab-Velocity-Flat-YMBOY12DOF-NoPhase
+FreqLab-Velocity-Flat-YMBOY12DOF-FreqReward
+```
 
-**Keywords:** extension, template, isaaclab
+`NoPhase` is the time-domain regularization baseline. `FreqReward` keeps the
+same task and deployable observation spaces while replacing that regularization
+with shared-window joint-position frequency penalties.
+
+The actor receives deployable proprioceptive observations. The critic is asymmetric and additionally receives privileged base velocity, foot wrench, foot pose, and foot velocity observations. No gait-phase state or auxiliary reconstruction observation groups are used.
+
+The terrain is generated with `PerlinPlaneTerrainCfg`, uses `noise_scale=[0.0, 0.02]`, and has terrain-level curriculum disabled.
 
 ## Installation
 
-- Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html).
-  We recommend using the conda or uv installation as it simplifies calling Python scripts from the terminal.
-
-- Clone or copy this project/repository separately from the Isaac Lab installation (i.e. outside the `IsaacLab` directory):
-
-- Using a python interpreter that has Isaac Lab installed, install the library in editable mode using:
-
-    ```bash
-    # use 'PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-    python -m pip install -e source/humanoid_isaac_freq
-
-- Verify that the extension is correctly installed by:
-
-    - Listing the available tasks:
-
-        Note: It the task name changes, it may be necessary to update the search pattern `"Template-"`
-        (in the `scripts/list_envs.py` file) so that it can be listed.
-
-        ```bash
-        # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-        python scripts/list_envs.py
-        ```
-
-    - Running a task:
-
-        ```bash
-        # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-        python scripts/<RL_LIBRARY>/train.py --task=<TASK_NAME>
-        ```
-
-    - Running a task with dummy agents:
-
-        These include dummy agents that output zero or random agents. They are useful to ensure that the environments are configured correctly.
-
-        - Zero-action agent
-
-            ```bash
-            # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-            python scripts/zero_agent.py --task=<TASK_NAME>
-            ```
-        - Random-action agent
-
-            ```bash
-            # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-            python scripts/random_agent.py --task=<TASK_NAME>
-            ```
-
-### Set up IDE (Optional)
-
-To setup the IDE, please follow these instructions:
-
-- Run VSCode Tasks, by pressing `Ctrl+Shift+P`, selecting `Tasks: Run Task` and running the `setup_python_env` in the drop down menu.
-  When running this task, you will be prompted to add the absolute path to your Isaac Sim installation.
-
-If everything executes correctly, it should create a file .python.env in the `.vscode` directory.
-The file contains the python paths to all the extensions provided by Isaac Sim and Omniverse.
-This helps in indexing all the python modules for intelligent suggestions while writing code.
-
-### Setup as Omniverse Extension (Optional)
-
-We provide an example UI extension that will load upon enabling your extension defined in `source/humanoid_isaac_freq/humanoid_isaac_freq/ui_extension_example.py`.
-
-To enable your extension, follow these steps:
-
-1. **Add the search path of this project/repository** to the extension manager:
-    - Navigate to the extension manager using `Window` -> `Extensions`.
-    - Click on the **Hamburger Icon**, then go to `Settings`.
-    - In the `Extension Search Paths`, enter the absolute path to the `source` directory of this project/repository.
-    - If not already present, in the `Extension Search Paths`, enter the path that leads to Isaac Lab's extension directory directory (`IsaacLab/source`)
-    - Click on the **Hamburger Icon**, then click `Refresh`.
-
-2. **Search and enable your extension**:
-    - Find your extension under the `Third Party` category.
-    - Toggle it to enable your extension.
-
-## Code formatting
-
-We have a pre-commit template to automatically format your code.
-To install pre-commit:
+Activate the conda environment containing Isaac Lab 2.2.3, then install this extension in editable mode:
 
 ```bash
-pip install pre-commit
+python -m pip install -e source/humanoid_isaac_freq
 ```
 
-Then you can run pre-commit with:
+Verify task registration:
 
 ```bash
-pre-commit run --all-files
+python scripts/list_envs.py
 ```
 
-## Troubleshooting
+## Training
 
-### Pylance Missing Indexing of Extensions
+Run native RSL-RL PPO headlessly:
 
-In some VsCode versions, the indexing of part of the extensions is missing.
-In this case, add the path to your extension in `.vscode/settings.json` under the key `"python.analysis.extraPaths"`.
+```bash
+python scripts/rsl_rl/train.py \
+  --task FreqLab-Velocity-Flat-YMBOY12DOF-NoPhase \
+  --headless
+```
+Play a trained policy:
 
-```json
-{
-    "python.analysis.extraPaths": [
-        "<path-to-ext-repo>/source/humanoid_isaac_freq"
-    ]
-}
+```bash
+python scripts/rsl_rl/play.py \
+  --task FreqLab-Velocity-Flat-YMBOY12DOF-NoPhase \
+  --num_envs 32
 ```
 
-### Pylance Crash
 
-If you encounter a crash in `pylance`, it is probable that too many files are indexed and you run out of memory.
-A possible solution is to exclude some of omniverse packages that are not used in your project.
-To do so, modify `.vscode/settings.json` and comment out packages under the key `"python.analysis.extraPaths"`
-Some examples of packages that can likely be excluded are:
 
-```json
-"<path-to-isaac-sim>/extscache/omni.anim.*"         // Animation packages
-"<path-to-isaac-sim>/extscache/omni.kit.*"          // Kit UI tools
-"<path-to-isaac-sim>/extscache/omni.graph.*"        // Graph UI tools
-"<path-to-isaac-sim>/extscache/omni.services.*"     // Services tools
-...
+Train the frequency-reward task:
+
+```bash
+python scripts/rsl_rl/train.py \
+  --task FreqLab-Velocity-Flat-YMBOY12DOF-FreqReward \
+  --headless
+
+python scripts/rsl_rl/play.py \
+  --task FreqLab-Velocity-Flat-YMBOY12DOF-FreqReward \
+  --num_envs=32
+
+tensorboard --logdir=logs/rsl_rl/flat_12dof_freq_reward
 ```
+
+
+
+Training outputs are written under `logs/rsl_rl/flat_12dof_freq_no_phase/` and
+`logs/rsl_rl/flat_12dof_freq_reward/`, respectively.
+
+## Configuration layout
+
+- `ymboy_12dof_envcfg_base.py` contains the robot task, observations, actions, domain randomization, terminations, and task rewards.
+- `ymboy_12dof_envcfg_time_rewards.py` adds the baseline time-domain joint and action regularization.
+- `ymboy_12dof_envcfg_freq_rewards.py` configures joint scales, bilateral mappings, and six frequency penalties.
+- `mdp/freq_rewards.py` implements the shared GPU ring buffer, cached FFT, and frequency reward terms.
