@@ -9,6 +9,7 @@ or frequency-domain joint regularization without changing the task definition.
 """
 
 import math
+import os
 
 from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -68,6 +69,17 @@ YAW_JOINT_NAMES = ["left_hip_yaw_joint", "right_hip_yaw_joint"]
 ROBOT_BASE_LINK = "base_link"
 ROBOT_FOOT_LINKS = ["left_ankle_roll_link", "right_ankle_roll_link"]
 MAX_VEL = 1.0
+
+
+_play_env = os.environ.get("RSL_RL_PLAY")
+if _play_env is None:
+    play_mode = 0
+else:
+    try:
+        play_flag = bool(int(_play_env))
+    except Exception:
+        play_flag = str(_play_env).lower() in ("1", "true", "yes")
+    play_mode = 1 if play_flag else 0
 
 
 @configclass
@@ -255,7 +267,7 @@ class YMBOYTaskRewardsCfg:
     is_terminated = RewTerm(func=mdp.is_terminated, weight=-200.0)
     feet_slide = RewTerm(
         func=mdp.feet_slide,
-        weight=-0.0,
+        weight=-0.25,   # -0.25
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=ROBOT_FOOT_LINKS),
             "asset_cfg": SceneEntityCfg("robot", body_names=ROBOT_FOOT_LINKS),
@@ -276,13 +288,13 @@ class YMBOYTaskRewardsCfg:
     )
     base_vel_z_l2 = RewTerm(
         func=mdp.base_vel_z_l2,
-        weight=-1.0,
+        weight=-2.0,
         params={"asset_cfg": SceneEntityCfg("robot")},
     )
     ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
     track_lin_vel_xy_exp = RewTerm(
         func=mdp.track_lin_vel_xy_exp,
-        weight=3.0,
+        weight=2.0,
         params={"command_name": "base_velocity", "std": MAX_VEL / 2.0},
     )
     track_ang_vel_z_exp = RewTerm(
@@ -412,20 +424,20 @@ class YMBOYEventCfg:
             },
         },
     )
-    randomize_push_robot = EventTerm(
-        func=mdp.push_by_setting_velocity,
-        mode="interval",
-        interval_range_s=(1.0, 3.0),
-        params={
-            "velocity_range": {
-                "x": (-0.5, -0.5),
-                "y": (-0.5, 0.5),
-                "yaw": (-0.75, 0.75),
-                "pitch": (-0.5, 0.5),
-                "roll": (-0.5, 0.5),
-            }
-        },
-    )
+    # randomize_push_robot = EventTerm(
+    #     func=mdp.push_by_setting_velocity,
+    #     mode="interval",
+    #     interval_range_s=(1.0, 3.0),
+    #     params={
+    #         "velocity_range": {
+    #             "x": (-0.5, -0.5),
+    #             "y": (-0.5, 0.5),
+    #             "yaw": (-0.75, 0.75),
+    #             "pitch": (-0.5, 0.5),
+    #             "roll": (-0.5, 0.5),
+    #         }
+    #     },
+    # )
 
 
 @configclass
@@ -440,7 +452,7 @@ class YMBOYTerminationsCfg:
     #     func=mdp.heading_error_too_large,
     #     params={"asset_cfg": SceneEntityCfg("robot"), "command_name": "base_velocity", "threshold": 1.5},
     # )
-    swap_time_too_long = DoneTerm(func=mdp.swap_time_too_long, params={"swap_time_threshold": 200})
+    # swap_time_too_long = DoneTerm(func=mdp.swap_time_too_long, params={"swap_time_threshold": 200})
     root_height_below_minimum = DoneTerm(func=mdp.root_height_below_minimum, params={"minimum_height": 0.4})
     illegal_contact = DoneTerm(
         func=mdp.illegal_contact,
@@ -451,17 +463,17 @@ class YMBOYTerminationsCfg:
             "threshold": 1.0,
         },
     )
-    commanded_no_progress = DoneTerm(
-        func=mdp.CommandedNoProgressTermination,
-        params={
-            "command_name": "base_velocity",
-            "window_time": 2.0,
-            "min_expected_distance": 0.25,
-            "progress_ratio": 0.5,
-            "command_threshold": 0.2,
-            "asset_cfg": SceneEntityCfg("robot"),
-        },
-    )
+    # commanded_no_progress = DoneTerm(
+    #     func=mdp.CommandedNoProgressTermination,
+    #     params={
+    #         "command_name": "base_velocity",
+    #         "window_time": 2.0,
+    #         "min_expected_distance": 0.25,
+    #         "progress_ratio": 0.5,
+    #         "command_threshold": 0.2,
+    #         "asset_cfg": SceneEntityCfg("robot"),
+    #     },
+    # )
 
 
 @configclass
@@ -482,6 +494,11 @@ class YMBOY12DOFEnvCfgBase(LocomotionVelocityEnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
+
+        if play_mode:
+            self.scene.terrain.terrain_type = "plane"
+            self.scene.terrain.terrain_generator = None
+
         self.scene.robot = YMBOT_BOY_12DOF_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
         self.commands.base_velocity.rel_standing_envs = 0.1
 

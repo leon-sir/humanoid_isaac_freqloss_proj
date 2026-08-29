@@ -66,6 +66,9 @@ import time
 
 import gymnasium as gym
 import torch
+
+os.environ["RSL_RL_PLAY"] = "1"
+
 from rsl_rl.runners import DistillationRunner, OnPolicyRunner
 
 from isaaclab.envs import (

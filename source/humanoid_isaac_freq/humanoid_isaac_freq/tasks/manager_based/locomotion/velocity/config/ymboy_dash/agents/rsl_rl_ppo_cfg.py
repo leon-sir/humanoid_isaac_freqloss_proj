@@ -63,3 +63,45 @@ class YMBOY12DOFFreqRewardPPORunnerCfg(YMBOY12DOFFlatPPORunnerCfg):
     experiment_name = "flat_12dof_freq_reward"
     run_name = "freq_rewards"
     max_iterations = 3000
+
+
+@configclass
+class YMBOY12DOFFreqAblation1PPORunnerCfg(YMBOY12DOFFreqRewardPPORunnerCfg):
+    """Common runner settings for the first single-term frequency-reward ablation."""
+
+    experiment_name = "flat_12dof_freq_ablation_1"
+
+
+@configclass
+class YMBOY12DOFFreqAblationNoDcDefaultPosturePPORunnerCfg(YMBOY12DOFFreqAblation1PPORunnerCfg):
+    run_name = "no_dc_default_posture"
+
+
+@configclass
+class YMBOY12DOFFreqAblationNoBandEnergyEncouragePPORunnerCfg(YMBOY12DOFFreqAblation1PPORunnerCfg):
+    run_name = "no_band_energy_encourage"
+
+
+@configclass
+class YMBOY12DOFFreqAblationNoHighFrequencyEncouragePPORunnerCfg(YMBOY12DOFFreqAblation1PPORunnerCfg):
+    run_name = "no_high_frequency_encourage"
+
+
+@configclass
+class YMBOY12DOFFreqAblationNoEnergyDisencouragePPORunnerCfg(YMBOY12DOFFreqAblation1PPORunnerCfg):
+    run_name = "no_energy_disencourage"
+
+
+@configclass
+class YMBOY12DOFFreqAblationNoFundamentalConcentrationPPORunnerCfg(YMBOY12DOFFreqAblation1PPORunnerCfg):
+    run_name = "no_fundamental_concentration"
+
+
+@configclass
+class YMBOY12DOFFreqAblationNoLeftRightFrequencyEnergyMatchPPORunnerCfg(YMBOY12DOFFreqAblation1PPORunnerCfg):
+    run_name = "no_left_right_frequency_energy_match"
+
+
+@configclass
+class YMBOY12DOFFreqAblationNoLeftRightPhasePPORunnerCfg(YMBOY12DOFFreqAblation1PPORunnerCfg):
+    run_name = "no_left_right_phase"

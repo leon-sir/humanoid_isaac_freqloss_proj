@@ -61,19 +61,52 @@ python scripts/rsl_rl/train.py \
 
 python scripts/rsl_rl/play.py \
   --task FreqLab-Velocity-Flat-YMBOY12DOF-FreqReward \
-  --num_envs=32
+  --num_envs=32 \
+  --video --video_length=400 \
+  --checkpoint=logs/rsl_rl/flat_12dof_freq_reward/2026-08-12_16-36-14_freq_rewards/model_2999.pt
 
 tensorboard --logdir=logs/rsl_rl/flat_12dof_freq_reward
 ```
 
+### Frequency-reward ablations
+
+Each task below removes exactly one frequency reward term from
+`FreqLab-Velocity-Flat-YMBOY12DOF-FreqReward`. Run all seven ablations
+sequentially (the chain stops if any training run fails):
+
+```bash
+python scripts/rsl_rl/train.py \
+  --task FreqLab-Velocity-Flat-YMBOY12DOF-FreqReward-Ablation-NoDcDefaultPosture \
+  --headless && \
+python scripts/rsl_rl/train.py \
+  --task FreqLab-Velocity-Flat-YMBOY12DOF-FreqReward-Ablation-NoBandEnergyEncourage \
+  --headless && \
+python scripts/rsl_rl/train.py \
+  --task FreqLab-Velocity-Flat-YMBOY12DOF-FreqReward-Ablation-NoHighFrequencyEncourage \
+  --headless && \
+python scripts/rsl_rl/train.py \
+  --task FreqLab-Velocity-Flat-YMBOY12DOF-FreqReward-Ablation-NoEnergyDisencourage \
+  --headless && \
+python scripts/rsl_rl/train.py \
+  --task FreqLab-Velocity-Flat-YMBOY12DOF-FreqReward-Ablation-NoFundamentalConcentration \
+  --headless && \
+python scripts/rsl_rl/train.py \
+  --task FreqLab-Velocity-Flat-YMBOY12DOF-FreqReward-Ablation-NoLeftRightFrequencyEnergyMatch \
+  --headless && \
+python scripts/rsl_rl/train.py \
+  --task FreqLab-Velocity-Flat-YMBOY12DOF-FreqReward-Ablation-NoLeftRightPhase \
+  --headless
+```
 
 
-Training outputs are written under `logs/rsl_rl/flat_12dof_freq_no_phase/` and
-`logs/rsl_rl/flat_12dof_freq_reward/`, respectively.
+
+Training outputs are written under `logs/rsl_rl/flat_12dof_freq_no_phase/`,
+`logs/rsl_rl/flat_12dof_freq_reward/`, and
+`logs/rsl_rl/flat_12dof_freq_ablation_1/`.
 
 ## Configuration layout
 
 - `ymboy_12dof_envcfg_base.py` contains the robot task, observations, actions, domain randomization, terminations, and task rewards.
 - `ymboy_12dof_envcfg_time_rewards.py` adds the baseline time-domain joint and action regularization.
-- `ymboy_12dof_envcfg_freq_rewards.py` configures joint scales, bilateral mappings, and six frequency penalties.
+- `ymboy_12dof_envcfg_freq_rewards.py` configures joint scales, bilateral mappings, and frequency shaping terms.
 - `mdp/freq_rewards.py` implements the shared GPU ring buffer, cached FFT, and frequency reward terms.

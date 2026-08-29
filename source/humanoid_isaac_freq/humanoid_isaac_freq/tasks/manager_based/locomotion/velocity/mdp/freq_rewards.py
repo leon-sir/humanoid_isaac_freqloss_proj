@@ -11,6 +11,7 @@ on the simulation device.
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -198,19 +199,32 @@ def _command_is_moving(env, command_name: str, k_omega: float, threshold: float)
     return magnitude > threshold
 
 
+def _frequency_band_indices(
+    analyzer: JointFrequencyAnalyzer,
+    frequency_band_hz: tuple[float, float],
+    parameter_name: str,
+) -> torch.Tensor:
+    """Resolve an inclusive frequency band to discrete analyzer bins."""
+    f_min, f_max = map(float, frequency_band_hz)
+    if not 0.0 <= f_min < f_max:
+        raise ValueError(f"Expected 0 <= f_min < f_max for {parameter_name}, got {frequency_band_hz}")
+    indices = torch.nonzero((analyzer.freq >= f_min) & (analyzer.freq <= f_max), as_tuple=False).flatten()
+    if indices.numel() == 0:
+        frequency_resolution = 1.0 / (analyzer.window_size * analyzer.step_dt)
+        raise ValueError(
+            f"{parameter_name}={frequency_band_hz} contains no FFT bins; "
+            f"frequency resolution is {frequency_resolution:.3f} Hz"
+        )
+    return indices
+
+
 def _robot_fundamental(
     analyzer: JointFrequencyAnalyzer,
     joint_indices: torch.Tensor,
     search_band_hz: tuple[float, float],
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Return aggregate power, peak frequency, and non-DC energy."""
-    f_min, f_max = search_band_hz
-    search_ids = torch.nonzero((analyzer.freq >= f_min) & (analyzer.freq <= f_max), as_tuple=False).flatten()
-    if search_ids.numel() == 0:
-        raise ValueError(
-            f"fundamental_search_band_hz={search_band_hz} contains no FFT bins; "
-            f"frequency resolution is {1.0 / (analyzer.window_size * analyzer.step_dt):.3f} Hz"
-        )
+    search_ids = _frequency_band_indices(analyzer, search_band_hz, "fundamental_search_band_hz")
     robot_power = analyzer.cached_power[:, joint_indices].sum(dim=1)
     peak_local = robot_power[:, search_ids].argmax(dim=-1)
     peak_frequency = analyzer.freq[search_ids[peak_local]]
@@ -219,19 +233,34 @@ def _robot_fundamental(
 
 
 class JointDcPosturePenalty(ManagerTermBase):
-    """Penalize window mean posture with command-conditioned moving limits."""
+    """Penalize selected joints' window mean posture with command-conditioned moving limits."""
 
     def __init__(self, cfg: RewardTermCfg, env):
         super().__init__(cfg, env)
         self.analyzer = _get_shared_analyzer(env, cfg.params["analyzer_cfg"])
+        joint_patterns = cfg.params.get("joint_names")
+        if joint_patterns is None:
+            joint_names = self.analyzer.joint_names
+        else:
+            if isinstance(joint_patterns, str):
+                joint_patterns = [joint_patterns]
+            if not joint_patterns:
+                raise ValueError("joint_names must contain at least one joint name or regular expression")
+            joint_names = []
+            for pattern in joint_patterns:
+                matches = [name for name in self.analyzer.joint_names if re.fullmatch(pattern, name)]
+                if not matches:
+                    raise ValueError(f"joint_names pattern {pattern!r} matched no configured analyzer joints")
+                joint_names.extend(name for name in matches if name not in joint_names)
+        self.joint_indices = self.analyzer.joint_indices(joint_names)
         moving_dc_limit = cfg.params["moving_dc_limit"]
         if isinstance(moving_dc_limit, dict):
-            missing = [name for name in self.analyzer.joint_names if name not in moving_dc_limit]
+            missing = [name for name in joint_names if name not in moving_dc_limit]
             if missing:
                 raise ValueError(f"moving_dc_limit is missing joints: {missing}")
-            limits = [moving_dc_limit[name] for name in self.analyzer.joint_names]
+            limits = [moving_dc_limit[name] for name in joint_names]
         else:
-            limits = [moving_dc_limit] * self.analyzer.num_joints
+            limits = [moving_dc_limit] * len(joint_names)
         if any(float(limit) < 0.0 for limit in limits):
             raise ValueError("moving_dc_limit values must be non-negative")
         self.moving_dc_limit = torch.tensor(limits, device=env.device)
@@ -244,10 +273,11 @@ class JointDcPosturePenalty(ManagerTermBase):
         k_omega: float,
         stand_command_threshold: float,
         moving_dc_limit: float | dict[str, float],
+        joint_names: str | Sequence[str] | None = None,
     ) -> torch.Tensor:
-        del analyzer_cfg, moving_dc_limit
+        del analyzer_cfg, moving_dc_limit, joint_names
         self.analyzer.update_once(env)
-        mean = self.analyzer.cached_mean
+        mean = self.analyzer.cached_mean[:, self.joint_indices]
         stand_penalty = mean.square().mean(dim=-1)
         move_excess = torch.relu(mean.abs() - self.moving_dc_limit)
         move_penalty = move_excess.square().mean(dim=-1)
@@ -312,6 +342,60 @@ class JointSpectralEnergyPenalty(ManagerTermBase):
         return torch.where(self.analyzer.cached_ready, result, torch.zeros_like(result))
 
 
+class JointSpectralBandEnergyReward(ManagerTermBase):
+    """Reward each selected joint for reaching a minimum normalized band energy.
+
+    Band energy is divided by the Hann-window energy, so the configured target
+    is independent of FFT window length.  Each joint contributes equally and
+    saturates at one, preventing additional reward for excessive oscillation.
+    """
+
+    def __init__(self, cfg: RewardTermCfg, env):
+        super().__init__(cfg, env)
+        self.analyzer = _get_shared_analyzer(env, cfg.params["analyzer_cfg"])
+        joint_names = cfg.params["joint_names"]
+        self.joint_indices = self.analyzer.joint_indices(joint_names)
+        energy_band_hz = cfg.params["energy_band_hz"]
+        if float(energy_band_hz[0]) <= 0.0:
+            raise ValueError("energy_band_hz must exclude the DC bin")
+        self.band_indices = _frequency_band_indices(self.analyzer, energy_band_hz, "energy_band_hz")
+
+        target_band_energy = cfg.params["target_band_energy"]
+        if isinstance(target_band_energy, dict):
+            missing = [name for name in joint_names if name not in target_band_energy]
+            if missing:
+                raise ValueError(f"target_band_energy is missing joints: {missing}")
+            targets = [target_band_energy[name] for name in joint_names]
+        else:
+            targets = [target_band_energy] * len(joint_names)
+        if any(float(target) <= 0.0 for target in targets):
+            raise ValueError("target_band_energy values must be positive")
+        self.target_band_energy = torch.tensor(targets, dtype=torch.float, device=env.device)
+
+    def __call__(
+        self,
+        env,
+        analyzer_cfg: JointFrequencyAnalyzerCfg,
+        command_name: str,
+        k_omega: float,
+        stand_command_threshold: float,
+        joint_names: Sequence[str],
+        energy_band_hz: tuple[float, float],
+        target_band_energy: float | dict[str, float],
+    ) -> torch.Tensor:
+        del analyzer_cfg, joint_names, energy_band_hz, target_band_energy
+        self.analyzer.update_once(env)
+        power = self.analyzer.cached_power[:, self.joint_indices]
+        band_energy = power[:, :, self.band_indices].sum(dim=-1) / self.analyzer.window_energy
+        # A bounded lower-target reward: zero at no oscillation and one once the
+        # per-joint target is reached.  There is no incentive to exceed it.
+        achievement = torch.clamp(band_energy / self.target_band_energy, min=0.0, max=1.0)
+        result = achievement.mean(dim=-1)
+        moving = _command_is_moving(env, command_name, k_omega, stand_command_threshold)
+        valid = self.analyzer.cached_ready & moving
+        return torch.where(valid, result, torch.zeros_like(result))
+
+
 class JointFundamentalConcentrationPenalty(ManagerTermBase):
     """Penalize moving spectra that are not concentrated around one gait frequency."""
 
@@ -345,8 +429,8 @@ class JointFundamentalConcentrationPenalty(ManagerTermBase):
         return torch.where(valid, result, torch.zeros_like(result))
 
 
-class JointLeftRightFundamentalMatchPenalty(ManagerTermBase):
-    """Penalize different left/right peak frequencies for configured pairs."""
+class JointLeftRightFrequencyEnergyMatchPenalty(ManagerTermBase):
+    """Match left/right peak frequencies and normalized band energies."""
 
     def __init__(self, cfg: RewardTermCfg, env):
         super().__init__(cfg, env)
@@ -354,6 +438,10 @@ class JointLeftRightFundamentalMatchPenalty(ManagerTermBase):
         pairs = cfg.params["frequency_joint_pairs"]
         self.left_indices = self.analyzer.joint_indices([pair[0] for pair in pairs])
         self.right_indices = self.analyzer.joint_indices([pair[1] for pair in pairs])
+        energy_match_weight = float(cfg.params.get("energy_match_weight", 0.0))
+        if energy_match_weight < 0.0:
+            raise ValueError("energy_match_weight must be non-negative")
+        self.energy_match_weight = energy_match_weight
 
     def __call__(
         self,
@@ -365,28 +453,37 @@ class JointLeftRightFundamentalMatchPenalty(ManagerTermBase):
         fundamental_search_band_hz: tuple[float, float],
         frequency_joint_pairs: Sequence[tuple[str, str]],
         spectrum_energy_floor: float,
+        energy_match_weight: float = 0.0,
     ) -> torch.Tensor:
-        del analyzer_cfg, frequency_joint_pairs
+        del analyzer_cfg, frequency_joint_pairs, energy_match_weight
         self.analyzer.update_once(env)
         f_min, f_max = fundamental_search_band_hz
-        search_ids = torch.nonzero(
-            (self.analyzer.freq >= f_min) & (self.analyzer.freq <= f_max), as_tuple=False
-        ).flatten()
-        if search_ids.numel() == 0:
-            raise ValueError(f"fundamental_search_band_hz={fundamental_search_band_hz} has no bins")
+        search_ids = _frequency_band_indices(self.analyzer, fundamental_search_band_hz, "fundamental_search_band_hz")
         left_power = self.analyzer.cached_power[:, self.left_indices][:, :, search_ids]
         right_power = self.analyzer.cached_power[:, self.right_indices][:, :, search_ids]
         left_peak = self.analyzer.freq[search_ids[left_power.argmax(dim=-1)]]
         right_peak = self.analyzer.freq[search_ids[right_power.argmax(dim=-1)]]
-        pair_penalty = ((left_peak - right_peak) / (f_max - f_min)).square()
-        pair_valid = (left_power.sum(dim=-1) > spectrum_energy_floor) & (
-            right_power.sum(dim=-1) > spectrum_energy_floor
-        )
+        frequency_penalty = ((left_peak - right_peak) / (f_max - f_min)).square()
+
+        left_energy = left_power.sum(dim=-1)
+        right_energy = right_power.sum(dim=-1)
+        # This bounded symmetry index is scale-free: zero means equal energy,
+        # while one is approached when only one side oscillates.
+        energy_penalty = ((left_energy - right_energy) / (left_energy + right_energy + self.analyzer.cfg.eps)).square()
+        both_sides_active = (left_energy > spectrum_energy_floor) & (right_energy > spectrum_energy_floor)
+        pair_penalty = frequency_penalty * both_sides_active + self.energy_match_weight * energy_penalty
+        # Energy asymmetry remains informative when only one side is active;
+        # only an effectively silent pair is excluded.
+        pair_valid = left_energy + right_energy > spectrum_energy_floor
         valid_count = pair_valid.sum(dim=-1)
         result = (pair_penalty * pair_valid).sum(dim=-1) / valid_count.clamp_min(1)
         moving = _command_is_moving(env, command_name, k_omega, stand_command_threshold)
         valid = self.analyzer.cached_ready & moving & (valid_count > 0)
         return torch.where(valid, result, torch.zeros_like(result))
+
+
+# Backward-compatible name for older task configurations.
+JointLeftRightFundamentalMatchPenalty = JointLeftRightFrequencyEnergyMatchPenalty
 
 
 class JointLeftRightPhasePenalty(ManagerTermBase):
