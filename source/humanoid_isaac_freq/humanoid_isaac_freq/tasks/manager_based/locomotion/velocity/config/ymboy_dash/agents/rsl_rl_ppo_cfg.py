@@ -19,7 +19,7 @@ class YMBOY12DOFFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 6000
     save_interval = 500
-    experiment_name = "flat_12dof_freq_no_phase"
+    experiment_name = "flat_12dof_time_reward"
     run_name = "time_rewards"
     obs_groups = {"actor": ["policy"], "critic": ["critic"]}
 

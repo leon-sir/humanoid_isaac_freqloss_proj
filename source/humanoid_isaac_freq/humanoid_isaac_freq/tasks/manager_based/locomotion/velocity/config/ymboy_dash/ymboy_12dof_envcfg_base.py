@@ -10,6 +10,7 @@ or frequency-domain joint regularization without changing the task definition.
 
 import math
 import os
+from copy import deepcopy
 
 from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -21,13 +22,12 @@ from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.utils import configclass
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
-from humanoid_isaac_freq.assets.ymbot_boy_12dof import YMBOT_BOY_12DOF_CFG
 import humanoid_isaac_freq.tasks.manager_based.locomotion.velocity.mdp as mdp
+from humanoid_isaac_freq.assets.ymbot_boy_12dof import YMBOT_BOY_12DOF_CFG
 from humanoid_isaac_freq.tasks.manager_based.locomotion.velocity.velocity_env_cfg import (
     LocomotionVelocityEnvCfg,
     VelocitySceneCfg,
 )
-
 
 ACTUATED_JOINT_NAMES = [
     "left_hip_pitch_joint",
@@ -264,7 +264,27 @@ class YMBOYTaskRewardsCfg:
         weight=-1.0,
         params={"asset_cfg": SceneEntityCfg("robot", body_names=ROBOT_FOOT_LINKS)},
     )
+    feet_flat_orientation = RewTerm(
+        func=mdp.feet_orientation_contact,
+        weight=-1.0,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=ROBOT_FOOT_LINKS),
+            "asset_cfg": SceneEntityCfg("robot", body_names=ROBOT_FOOT_LINKS),
+        },
+    )
     is_terminated = RewTerm(func=mdp.is_terminated, weight=-200.0)
+    stand_still_without_cmd = RewTerm(
+        func=mdp.stand_still_without_cmd_v2,
+        weight=-2.0,
+        params={
+            "command_name": "base_velocity",
+            "command_threshold": 0.1,
+            "use_zeros_pos": False,
+            "asset_cfg": SceneEntityCfg(
+                "robot", joint_names=ACTUATED_JOINT_NAMES, preserve_order=True
+            ),
+        },
+    )
     feet_slide = RewTerm(
         func=mdp.feet_slide,
         weight=-0.25,   # -0.25
@@ -313,6 +333,39 @@ class YMBOYTaskRewardsCfg:
             "target_height": 0.65,
         },
     )
+
+
+def compose_reward_cfgs(
+    base_rewards: YMBOYTaskRewardsCfg,
+    *additional_rewards: object,
+) -> YMBOYTaskRewardsCfg:
+    """Combine independent reward configs into one flat manager configuration.
+
+    The reward manager only accepts ``RewardTermCfg`` instances (or ``None``)
+    as top-level fields.  Composition therefore copies every additional term
+    onto a private copy of the task-reward config instead of nesting configs.
+    Duplicate names are rejected so composition never silently changes a term.
+    """
+    if not isinstance(base_rewards, YMBOYTaskRewardsCfg):
+        raise TypeError(
+            "The first reward config must be YMBOYTaskRewardsCfg, "
+            f"received {type(base_rewards).__name__}"
+        )
+
+    composed = deepcopy(base_rewards)
+    term_names = set(vars(composed))
+    for reward_cfg in additional_rewards:
+        for term_name, term_cfg in vars(reward_cfg).items():
+            if term_name in term_names:
+                raise ValueError(f"Duplicate reward term while composing configs: {term_name!r}")
+            if term_cfg is not None and not isinstance(term_cfg, RewTerm):
+                raise TypeError(
+                    f"Composed reward field {term_name!r} must be RewardTermCfg or None, "
+                    f"received {type(term_cfg).__name__}"
+                )
+            setattr(composed, term_name, deepcopy(term_cfg))
+            term_names.add(term_name)
+    return composed
 
 
 @configclass
@@ -487,7 +540,7 @@ class YMBOY12DOFEnvCfgBase(LocomotionVelocityEnvCfg):
     observations: YMBOYObservationsCfg = YMBOYObservationsCfg()
     actions: YMBOYActionsCfg = YMBOYActionsCfg()
     commands: YMBOYCommandsCfg = YMBOYCommandsCfg()
-    rewards: YMBOYTaskRewardsCfg = YMBOYTaskRewardsCfg()
+    rewards: YMBOYTaskRewardsCfg = compose_reward_cfgs(YMBOYTaskRewardsCfg())
     terminations: YMBOYTerminationsCfg = YMBOYTerminationsCfg()
     events: YMBOYEventCfg = YMBOYEventCfg()
     curriculum: YMBOYCurriculumCfg = YMBOYCurriculumCfg()
@@ -501,6 +554,3 @@ class YMBOY12DOFEnvCfgBase(LocomotionVelocityEnvCfg):
 
         self.scene.robot = YMBOT_BOY_12DOF_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
         self.commands.base_velocity.rel_standing_envs = 0.1
-
-
-        

@@ -7,13 +7,13 @@ This project develops frequency-based MDP reward designs for 12-DoF YMBOY locomo
 The project registers two corresponding manager-based tasks:
 
 ```text
-FreqLab-Velocity-Flat-YMBOY12DOF-NoPhase
+FreqLab-Velocity-Flat-YMBOY12DOF-TimeReward
 FreqLab-Velocity-Flat-YMBOY12DOF-FreqReward
 ```
 
-`NoPhase` is the time-domain regularization baseline. `FreqReward` keeps the
-same task and deployable observation spaces while replacing that regularization
-with shared-window joint-position frequency penalties.
+`TimeReward` is the time-domain joint-regularization baseline. `FreqReward`
+keeps the same task, deployable observation spaces, and time-domain
+regularization while adding shared-window joint-position frequency terms.
 
 The actor receives deployable proprioceptive observations. The critic is asymmetric and additionally receives privileged base velocity, foot wrench, foot pose, and foot velocity observations. No gait-phase state or auxiliary reconstruction observation groups are used.
 
@@ -39,18 +39,17 @@ Run native RSL-RL PPO headlessly:
 
 ```bash
 python scripts/rsl_rl/train.py \
-  --task FreqLab-Velocity-Flat-YMBOY12DOF-NoPhase \
+  --task FreqLab-Velocity-Flat-YMBOY12DOF-TimeReward \
   --headless
 ```
+
 Play a trained policy:
 
 ```bash
 python scripts/rsl_rl/play.py \
-  --task FreqLab-Velocity-Flat-YMBOY12DOF-NoPhase \
+  --task FreqLab-Velocity-Flat-YMBOY12DOF-TimeReward \
   --num_envs 32
 ```
-
-
 
 Train the frequency-reward task:
 
@@ -66,6 +65,46 @@ python scripts/rsl_rl/play.py \
   --checkpoint=logs/rsl_rl/flat_12dof_freq_reward/2026-08-12_16-36-14_freq_rewards/model_2999.pt
 
 tensorboard --logdir=logs/rsl_rl/flat_12dof_freq_reward
+```
+
+### Rough-terrain depth-perception task
+
+The perception baseline and frequency-reward variant use the same
+`rsl_rl_dream` CNN-LSTM PPO runner and write runs to
+`logs/rsl_rl/rough_12dof_perception_rnn/` with distinct run-name suffixes.
+
+```bash
+RSL_RL_DREAM_ENABLE_CUDNN_RNN=1 python scripts/rsl_rl_dream/train.py \
+  --task=DreamLab-Velocity-Rough-YMBOY12DOF-Perception-RNN-Base-v0 \
+  --headless \
+  --no-export_network_structure
+
+RSL_RL_DREAM_ENABLE_CUDNN_RNN=1 python scripts/rsl_rl_dream/train.py \
+  --task=DreamLab-Velocity-Rough-YMBOY12DOF-Perception-RNN-FreqReward-v0 \
+  --headless \
+  --no-export_network_structure
+```
+
+Play a selected baseline or frequency-reward run without exporting the policy:
+
+```bash
+python scripts/rsl_rl_dream/play/play.py \
+  --task=DreamLab-Velocity-Rough-YMBOY12DOF-Perception-RNN-Base-v0 \
+  --num_envs=32 \
+  --no-export_policy \
+  --load_run=<base-run-directory>
+
+python scripts/rsl_rl_dream/play/play.py \
+  --task=DreamLab-Velocity-Rough-YMBOY12DOF-Perception-RNN-FreqReward-v0 \
+  --num_envs=32 \
+  --no-export_policy \
+  --load_run=<freq-reward-run-directory>
+```
+
+Inspect training metrics:
+
+```bash
+tensorboard --logdir=logs/rsl_rl/rough_12dof_perception_rnn
 ```
 
 ### Frequency-reward ablations
@@ -98,9 +137,7 @@ python scripts/rsl_rl/train.py \
   --headless
 ```
 
-
-
-Training outputs are written under `logs/rsl_rl/flat_12dof_freq_no_phase/`,
+Training outputs are written under `logs/rsl_rl/flat_12dof_time_reward/`,
 `logs/rsl_rl/flat_12dof_freq_reward/`, and
 `logs/rsl_rl/flat_12dof_freq_ablation_1/`.
 

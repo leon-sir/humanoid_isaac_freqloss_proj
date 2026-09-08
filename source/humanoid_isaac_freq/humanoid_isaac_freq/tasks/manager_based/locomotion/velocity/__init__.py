@@ -1,3 +1,3 @@
 """Velocity-tracking locomotion task."""
 
-from .config import ymboy_dash  # noqa: F401
+from .config import perception, ymboy_dash  # noqa: F401

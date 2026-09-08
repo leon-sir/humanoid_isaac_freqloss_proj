@@ -13,7 +13,9 @@ from .ymboy_12dof_envcfg_base import (
     ACTUATED_JOINT_NAMES,
     YMBOY12DOFEnvCfgBase,
     YMBOYTaskRewardsCfg,
+    compose_reward_cfgs,
 )
+from .ymboy_12dof_envcfg_time_rewards import YMBOY12DOFTimeOnlyRewardsCfg
 
 # The analyzer resolves these names against the articulation; dictionary order is
 # explicit configuration, not an implicit assumption about articulation ordering.
@@ -32,15 +34,6 @@ JOINT_FREQUENCY_SCALES = {
     "right_ankle_roll_joint": 0.25,
 }
 
-ENCOURAGED_FREQUENCY_JOINTS = [
-    "left_hip_pitch_joint",
-    "right_hip_pitch_joint",
-    "left_knee_joint",
-    "right_knee_joint",
-    "left_ankle_pitch_joint",
-    "right_ankle_pitch_joint",
-]
-
 DISCOURAGED_FREQUENCY_JOINTS = [
     "left_hip_roll_joint",
     "right_hip_roll_joint",
@@ -49,20 +42,34 @@ DISCOURAGED_FREQUENCY_JOINTS = [
     "left_ankle_roll_joint",
     "right_ankle_roll_joint",
 ]
-
-FREQUENCY_JOINT_PAIRS = [
-    ("left_hip_pitch_joint", "right_hip_pitch_joint"),
-    ("left_knee_joint", "right_knee_joint"),
-    ("left_ankle_pitch_joint", "right_ankle_pitch_joint"),
-]
 HIP_PITCH_JOINT_NAMES = [
     "left_hip_pitch_joint",
     "right_hip_pitch_joint",
 ]
 
+ONLY_HIP_PITCH = True
+if ONLY_HIP_PITCH:
+    ENCOURAGED_FREQUENCY_JOINTS = list(HIP_PITCH_JOINT_NAMES)
+    FREQUENCY_JOINT_PAIRS = [
+        ("left_hip_pitch_joint", "right_hip_pitch_joint"),
+    ]
+else:
+    ENCOURAGED_FREQUENCY_JOINTS = [
+        "left_hip_pitch_joint",
+        "right_hip_pitch_joint",
+        "left_knee_joint",
+        "right_knee_joint",
+        "left_ankle_pitch_joint",
+        "right_ankle_pitch_joint",
+    ]
+    FREQUENCY_JOINT_PAIRS = [
+        ("left_hip_pitch_joint", "right_hip_pitch_joint"),
+        ("left_knee_joint", "right_knee_joint"),
+        ("left_ankle_pitch_joint", "right_ankle_pitch_joint"),
+    ]
 
 PHASE_JOINT_PAIRS = list(FREQUENCY_JOINT_PAIRS)
-MIRROR_SIGNS = [1.0, 1.0, 1.0]
+MIRROR_SIGNS = [1.0] * len(FREQUENCY_JOINT_PAIRS)
 
 JOINT_FREQUENCY_ANALYZER_CFG = mdp.JointFrequencyAnalyzerCfg(
     analyzer_key="ymboy_12dof_joint_pos",
@@ -88,12 +95,10 @@ GAIT_ENERGY_BAND_HZ = (0.5, 1.5)    # (0.5, 3.0)
 
 
 @configclass
-class YMBOY12DOFFrequencyRewardsCfg(YMBOYTaskRewardsCfg):
-    """Task rewards plus joint-position frequency shaping terms."""
+class YMBOY12DOFFrequencyOnlyRewardsCfg:
+    """Joint-position frequency shaping added to the shared task rewards."""
 
-    action_smoothness = RewTerm(func=mdp.ActionSmoothnessPenalty, weight=-0.01)
-    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.05)
-    joint_spectral_dc_default_posture = RewTerm(
+    spectral_dc_default_posture = RewTerm(
         func=mdp.JointDcPosturePenalty,
         weight=-2,    # -0.5
         params={
@@ -101,6 +106,16 @@ class YMBOY12DOFFrequencyRewardsCfg(YMBOYTaskRewardsCfg):
             **COMMAND_PARAMS,
             "joint_names": ACTUATED_JOINT_NAMES,
             "moving_dc_limit": 0.0,  # 允许的均值偏差
+        },
+    )
+    spectral_left_right_dc_match = RewTerm(
+        func=mdp.JointLeftRightDcMatchPenalty,
+        weight=-0.5,
+        params={
+            "analyzer_cfg": JOINT_FREQUENCY_ANALYZER_CFG,
+            **COMMAND_PARAMS,
+            "dc_joint_pairs": FREQUENCY_JOINT_PAIRS,
+            "mirror_signs": MIRROR_SIGNS,
         },
     )
     # joint_spectral_dc_default_posture_hip_pitch = RewTerm(
@@ -113,7 +128,7 @@ class YMBOY12DOFFrequencyRewardsCfg(YMBOYTaskRewardsCfg):
     #         "moving_dc_limit": 0.0,  # 允许的均值偏差
     #     },
     # )
-    joint_spectral_band_energy_encourage = RewTerm(
+    spectral_band_energy_encourage = RewTerm(
         func=mdp.JointSpectralBandEnergyReward,
         weight=2,
         params={
@@ -139,7 +154,7 @@ class YMBOY12DOFFrequencyRewardsCfg(YMBOYTaskRewardsCfg):
     #             "target_band_energy": 0.08,
     #         },
     #     )
-    joint_spectral_high_frequency_encourage = RewTerm(
+    spectral_high_frequency_encourage = RewTerm(
         func=mdp.JointSpectralHighFrequencyPenalty,
         weight=-1e-5,  # -0.1
         params={
@@ -150,7 +165,7 @@ class YMBOY12DOFFrequencyRewardsCfg(YMBOYTaskRewardsCfg):
         },
     )
 
-    joint_spectral_energy_disencourage = RewTerm(
+    spectral_energy_disencourage = RewTerm(
         func=mdp.JointSpectralEnergyPenalty,
         weight=-0.5,
         params={
@@ -158,7 +173,7 @@ class YMBOY12DOFFrequencyRewardsCfg(YMBOYTaskRewardsCfg):
             "joint_names": DISCOURAGED_FREQUENCY_JOINTS,
         },
     )
-    joint_gait_fundamental_frequency_concentration = RewTerm(
+    spectral_gait_fundamental_frequency_concentration = RewTerm(
         func=mdp.JointFundamentalConcentrationPenalty,
         weight=-1,  # -0.2
         params={
@@ -168,7 +183,7 @@ class YMBOY12DOFFrequencyRewardsCfg(YMBOYTaskRewardsCfg):
             "fundamental_joint_names": ENCOURAGED_FREQUENCY_JOINTS,
         },
     )
-    joint_left_right_frequency_energy_match = RewTerm(
+    spectral_left_right_frequency_energy_match = RewTerm(
         func=mdp.JointLeftRightFrequencyEnergyMatchPenalty,
         weight=-0.1, # -0.1
         params={
@@ -178,7 +193,7 @@ class YMBOY12DOFFrequencyRewardsCfg(YMBOYTaskRewardsCfg):
             "energy_match_weight": 1.0,
         },
     )
-    joint_left_right_phase = RewTerm(
+    spectral_left_right_phase = RewTerm(
         func=mdp.JointLeftRightPhasePenalty,
         weight=-2,   # -0.02
         params={
@@ -190,25 +205,19 @@ class YMBOY12DOFFrequencyRewardsCfg(YMBOYTaskRewardsCfg):
             "mirror_signs": MIRROR_SIGNS,
         },
     )
-    stand_still_without_cmd = RewTerm(
-        func=mdp.stand_still_without_cmd_v2,
-        weight=-2.0,
-        params={
-            "command_name": "base_velocity",
-            "command_threshold": 0.1,
-            "use_zeros_pos": False,
-            "asset_cfg": SceneEntityCfg("robot", joint_names=ACTUATED_JOINT_NAMES, preserve_order=True),
-        },
-    )
 
 
 @configclass
 class YMBOY12DOFFrequencyRewardsEnvCfg(YMBOY12DOFEnvCfgBase):
-    rewards: YMBOY12DOFFrequencyRewardsCfg = YMBOY12DOFFrequencyRewardsCfg()
+    rewards: YMBOYTaskRewardsCfg = compose_reward_cfgs(
+        YMBOYTaskRewardsCfg(),
+        YMBOY12DOFFrequencyOnlyRewardsCfg(),
+        YMBOY12DOFTimeOnlyRewardsCfg(),
+    )
 
     def __post_init__(self):
         super().__post_init__()
-        # Match the deployable NoPhase baseline observation space.
+        # Match the deployable TimeReward baseline observation space.
         self.scene.height_scanner = None
         self.observations.policy.height_scan = None
         self.observations.critic.height_scan = None
@@ -221,7 +230,7 @@ class YMBOY12DOFFrequencyRewardsNoDcDefaultPostureEnvCfg(YMBOY12DOFFrequencyRewa
 
     def __post_init__(self):
         super().__post_init__()
-        self.rewards.joint_spectral_dc_default_posture = None
+        self.rewards.spectral_dc_default_posture = None
 
 
 @configclass
@@ -230,7 +239,7 @@ class YMBOY12DOFFrequencyRewardsNoBandEnergyEncourageEnvCfg(YMBOY12DOFFrequencyR
 
     def __post_init__(self):
         super().__post_init__()
-        self.rewards.joint_spectral_band_energy_encourage = None
+        self.rewards.spectral_band_energy_encourage = None
 
 
 @configclass
@@ -239,7 +248,7 @@ class YMBOY12DOFFrequencyRewardsNoHighFrequencyEncourageEnvCfg(YMBOY12DOFFrequen
 
     def __post_init__(self):
         super().__post_init__()
-        self.rewards.joint_spectral_high_frequency_encourage = None
+        self.rewards.spectral_high_frequency_encourage = None
 
 
 @configclass
@@ -248,7 +257,7 @@ class YMBOY12DOFFrequencyRewardsNoEnergyDisencourageEnvCfg(YMBOY12DOFFrequencyRe
 
     def __post_init__(self):
         super().__post_init__()
-        self.rewards.joint_spectral_energy_disencourage = None
+        self.rewards.spectral_energy_disencourage = None
 
 
 @configclass
@@ -257,7 +266,7 @@ class YMBOY12DOFFrequencyRewardsNoFundamentalConcentrationEnvCfg(YMBOY12DOFFrequ
 
     def __post_init__(self):
         super().__post_init__()
-        self.rewards.joint_gait_fundamental_frequency_concentration = None
+        self.rewards.spectral_gait_fundamental_frequency_concentration = None
 
 
 @configclass
@@ -266,7 +275,7 @@ class YMBOY12DOFFrequencyRewardsNoLeftRightFrequencyEnergyMatchEnvCfg(YMBOY12DOF
 
     def __post_init__(self):
         super().__post_init__()
-        self.rewards.joint_left_right_frequency_energy_match = None
+        self.rewards.spectral_left_right_frequency_energy_match = None
 
 
 @configclass
@@ -275,4 +284,4 @@ class YMBOY12DOFFrequencyRewardsNoLeftRightPhaseEnvCfg(YMBOY12DOFFrequencyReward
 
     def __post_init__(self):
         super().__post_init__()
-        self.rewards.joint_left_right_phase = None
+        self.rewards.spectral_left_right_phase = None

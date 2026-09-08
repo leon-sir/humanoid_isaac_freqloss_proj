@@ -9,15 +9,16 @@ from isaaclab.sensors import RayCasterCfg, patterns
 from isaaclab.utils import configclass
 
 import humanoid_isaac_freq.tasks.manager_based.locomotion.velocity.mdp as mdp
+
 from .ymboy_12dof_envcfg_base import (
     ACTUATED_JOINT_NAMES,
     ANKLE_JOINT_NAMES,
-    NON_HIP_PITCH_JOINT_NAMES,
     ROBOT_FOOT_LINKS,
     YAW_JOINT_NAMES,
+    VelocitySceneCfg,
     YMBOY12DOFEnvCfgBase,
     YMBOYTaskRewardsCfg,
-    VelocitySceneCfg,
+    compose_reward_cfgs,
 )
 
 
@@ -46,8 +47,8 @@ class YMBOYTimeRewardsSceneCfg(VelocitySceneCfg):
 
 
 @configclass
-class YMBOY12DOFTimeRewardsCfg(YMBOYTaskRewardsCfg):
-    """NoPhase Sim2Real reward set with time-domain joint regulation."""
+class YMBOY12DOFTimeOnlyRewardsCfg:
+    """Time-domain joint regulation added to the shared task rewards."""
 
     action_smoothness = RewTerm(func=mdp.ActionSmoothnessPenalty, weight=-0.01)
     ankle_joint_pos_limits = RewTerm(
@@ -78,14 +79,6 @@ class YMBOY12DOFTimeRewardsCfg(YMBOYTaskRewardsCfg):
         weight=-0.05,
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=ANKLE_JOINT_NAMES, preserve_order=True)
-        },
-    )
-    feet_flat_orientation = RewTerm(
-        func=mdp.feet_orientation_contact,
-        weight=-1.0,
-        params={
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=ROBOT_FOOT_LINKS),
-            "asset_cfg": SceneEntityCfg("robot", body_names=ROBOT_FOOT_LINKS),
         },
     )
     # feet_at_plane = RewTerm(
@@ -148,16 +141,6 @@ class YMBOY12DOFTimeRewardsCfg(YMBOYTaskRewardsCfg):
             )
         },
     )
-    stand_still_without_cmd = RewTerm(
-        func=mdp.stand_still_without_cmd_v2,
-        weight=-2.0,
-        params={
-            "command_name": "base_velocity",
-            "command_threshold": 0.1,
-            "use_zeros_pos": False,
-            "asset_cfg": SceneEntityCfg("robot", joint_names=ACTUATED_JOINT_NAMES, preserve_order=True),
-        },
-    )
     yaw_joint_pos_penalty = RewTerm(
         func=mdp.joint_pos_penalty_zero,
         weight=-5.0,
@@ -179,7 +162,10 @@ class YMBOY12DOFTimeRewardsCfg(YMBOYTaskRewardsCfg):
 @configclass
 class YMBOY12DOFTimeRewardsEnvCfg(YMBOY12DOFEnvCfgBase):
     scene: YMBOYTimeRewardsSceneCfg = YMBOYTimeRewardsSceneCfg(num_envs=4096, env_spacing=2.5)
-    rewards: YMBOY12DOFTimeRewardsCfg = YMBOY12DOFTimeRewardsCfg()
+    rewards: YMBOYTaskRewardsCfg = compose_reward_cfgs(
+        YMBOYTaskRewardsCfg(),
+        YMBOY12DOFTimeOnlyRewardsCfg(),
+    )
 
     def __post_init__(self):
         super().__post_init__()

@@ -6,7 +6,7 @@ import gymnasium as gym
 from . import agents, env
 
 gym.register(
-    id="FreqLab-Velocity-Flat-YMBOY12DOF-NoPhase",
+    id="FreqLab-Velocity-Flat-YMBOY12DOF-TimeReward",
     entry_point=f"{env.__name__}.manager_based_rl_env:ManagerBasedRLYMEnv",
     disable_env_checker=True,
     kwargs={
