@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Zheng Pan
 # SPDX-License-Identifier: Apache-2.0
 
-"""Collect a 12-DoF rollout and export spectra normalized exactly like training.
+"""Collect a 12/21-DoF rollout and export spectra normalized exactly like training.
 
 The analysis uses control-step samples and the same preprocessing as
 ``JointFrequencyAnalyzer``: ``z=(q-q_default)/scale``, unwindowed mean removal,
@@ -30,23 +30,18 @@ import cli_args  # noqa: E402, isort: skip
 # -----------------------------------------------------------------------------
 # Collection configuration
 # -----------------------------------------------------------------------------
-# Use a shared in-distribution operating point: this policy was trained with vx in [0, 1] m/s.
-COMMAND_VEL = 0.6
-VELOCITY_COMMAND = (COMMAND_VEL, 0.0, 0.0)
 INITIAL_BASE_VELOCITY_BODY = (0.0, 0.0, 0.0)
 
-TASK_NAME = "FreqLab-Velocity-Flat-YMBOY12DOF-FreqReward"
-CHECK_POINT = "logs/rsl_rl/flat_12dof_freq_reward/2026-08-12_16-36-14_freq_rewards/model_2999.pt"
 OUTPUT_ROOT = _SCRIPTS_DIR / "output/spectrum_analysis"
 
 NUM_FRAMES = 750
 WARMUP_STEPS = 250
-MAX_FREQUENCY_HZ = 25.0
+MAX_FREQUENCY_HZ = 5.0 # 25
 PLOT_DPI = 180
 SPECTRUM_EPS = 1.0e-8
 VIDEO = True
 
-JOINT_SCALES = {
+LEG_JOINT_SCALES = {
     "left_hip_pitch_joint": 0.55,
     "right_hip_pitch_joint": 0.55,
     "left_hip_roll_joint": 0.10,
@@ -60,11 +55,49 @@ JOINT_SCALES = {
     "left_ankle_roll_joint": 0.25,
     "right_ankle_roll_joint": 0.25,
 }
+
+MIMIC_EXTRA_JOINT_SCALES = {
+    "waist_yaw_joint": 0.25,
+    "left_shoulder_pitch_joint": 0.50,
+    "left_shoulder_roll_joint": 0.50,
+    "left_shoulder_yaw_joint": 0.50,
+    "left_elbow_joint": 0.50,
+    "right_shoulder_pitch_joint": 0.50,
+    "right_shoulder_roll_joint": 0.50,
+    "right_shoulder_yaw_joint": 0.50,
+    "right_elbow_joint": 0.50,
+}
+
+# Change only this variable to switch the matched task, checkpoint, command,
+# joint order, and normalization scales.
+PROFILE = "freq_mimic"
+
+match PROFILE:
+    case "freq_rewards":
+        TASK_NAME = "FreqLab-Velocity-Flat-YMBOY12DOF-FreqReward"
+        CHECK_POINT = (
+            "logs/rsl_rl/flat_12dof_freq_reward/"
+            "2026-08-12_16-36-14_freq_rewards/model_2999.pt"
+        )
+        COMMAND_VEL = 0.6
+        JOINT_SCALES = dict(LEG_JOINT_SCALES)
+    case "freq_mimic":
+        TASK_NAME = "FreqLab-Velocity-Flat-YMBOY21DOF-FreqMimic"
+        CHECK_POINT = (
+            "logs/rsl_rl/flat_21dof_freq_mimic/2026-09-12_23-04-17_freq_mimic_scaffold/model_11998.pt"
+        )
+        # The selected 002 reference motion averages about 0.94893 m/s forward.
+        COMMAND_VEL = 0.9489283781915138
+        JOINT_SCALES = {**LEG_JOINT_SCALES, **MIMIC_EXTRA_JOINT_SCALES}
+    case _:
+        raise ValueError(f"Unsupported collection profile: {PROFILE}")
+
+VELOCITY_COMMAND = (COMMAND_VEL, 0.0, 0.0)
 ACTUATED_JOINT_NAMES = list(JOINT_SCALES)
 
 
 parser = argparse.ArgumentParser(description="Collect scale-normalized joint spectra from a policy rollout.")
-parser.add_argument("--task", type=str, default=TASK_NAME, help="Gym task name.")
+parser.add_argument("--task", type=str, default=None, help="Override the profile's Gym task name.")
 parser.add_argument("--agent", type=str, default="rsl_rl_cfg_entry_point", help="Agent config registry key.")
 parser.add_argument("--num_envs", type=int, default=1, help="Must be 1 for a contiguous trajectory.")
 parser.add_argument("--seed", type=int, default=None, help="Environment seed.")
@@ -99,6 +132,9 @@ parser.add_argument("--real-time", action="store_true", default=False, help="App
 cli_args.add_rsl_rl_args(parser)
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
+
+if args_cli.task is None:
+    args_cli.task = TASK_NAME
 
 if args_cli.video:
     args_cli.enable_cameras = True
@@ -362,6 +398,7 @@ def write_metadata(
     """Record the exact policy and rollout settings associated with exported data."""
     path = output_dir / "rollout_metadata.json"
     payload = {
+        "profile": PROFILE,
         "task": task_name,
         "checkpoint": str(Path(checkpoint_path).resolve()),
         "checkpoint_file": Path(checkpoint_path).name,
@@ -475,6 +512,7 @@ def main(
     spectrum_output_path = args_cli.spectrum_output or default_output_dir / "runner_joint_power_scale.csv"
     env_cfg.log_dir = os.path.dirname(resume_path)
     print(f"[INFO] Task: {args_cli.task}")
+    print(f"[INFO] Collection profile: {PROFILE}")
     print(f"[INFO] Checkpoint: {resume_path}")
     print(f"[INFO] Output directory: {default_output_dir.resolve()}")
     print(f"[INFO] Fixed velocity command: {VELOCITY_COMMAND}")

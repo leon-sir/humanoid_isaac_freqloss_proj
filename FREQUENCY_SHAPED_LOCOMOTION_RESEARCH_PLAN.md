@@ -1022,3 +1022,45 @@ locomotion 是非线性、接触切换、近似周期时变系统。不能只凭
 
 总体路线从“可运行、可验证的频谱 reward”逐步推进到“具有经典控制含义的闭环频率整形”，避免第一阶段同时承担复杂接触信号、系统辨识和鲁棒理论的全部风险。
 
+## 36. 工程排查总结：连续楼梯的 collection time 与地形 contact offset
+
+### 36.1 现象与诊断（2026-09-08）
+
+在 4096 个环境的感知 locomotion Base 任务中，开启 pure stair 跨行高度累计以保持楼梯连续后，collection time 明显变长。相同 iteration 50–199 区间，连续楼梯的平均 collection time 为 **2.860 s**，关闭高度累计后为 **1.478 s**，金字塔楼梯为 **1.531 s**；三组 learning time 均约 1.12 s，碰撞栈均为 `2**29`。因此不能把差异归因于 PPO 更新、频域 reward 或碰撞栈预留容量本身。
+
+进一步使用相同 checkpoint 分项计时：高度累计使每控制步的物理仿真耗时由约 **13.67 ms 增至 63.53 ms**，深度相机耗时基本不变。整体 Z 平移没有改善；去除内部面并细分外表面的 surface 网格没有收益；拆成 261 个碰撞网格反而明显恶化。GPU 时间线最终定位到 **`convexTrimeshNarrowphase`（凸形碰撞体与三角网格的窄阶段碰撞处理）**，而不是相机射线查询。机器人后端 contact offsets 在两组中一致，为 1.4–3 mm，rest offsets 均为 0；地形偏移量则未显式设置，USD 返回自动值标记 `-inf`，它不是实际接触距离。
+
+### 36.2 有效干预及正式修复
+
+保持连续楼梯、boxes、单碰撞网格、机器人参数和 `2**29` 碰撞栈不变，只修改地形偏移量，得到以下四组对照：
+
+| 地形设置 | 总耗时（ms／控制步） | 窄阶段 kernel 累计耗时（ms） | PhysX 报告的碰撞栈需求（MiB） |
+|---|---:|---:|---:|
+| contact/rest 均自动 | 133.50 | 861.68 | 288.69 |
+| 仅 contact offset = 0.02 m | 64.80 | 32.40 | 2.05 |
+| 仅 rest offset = 0 m | 131.01 | 848.37 | 288.69 |
+| contact = 0.02 m，rest = 0 m | 62.42 | 32.40 | 2.05 |
+
+这里是预热 48 个控制步后采集的 **24 个控制步／96 个物理步**；kernel 时间为整个采集区间的累计值，不能与每步墙钟时间直接相加。PhysX 资源需求为末步接口读数，不是整个 rollout 的平均实际接触数量。原始数据见 [offset GPU trace](test/output/offset_gpu_trace_20260908_161201/)。
+
+**实测确认起作用的是显式 contact offset，而非 rest offset。** 正式感知 Base／FreqReward 任务已通过 `ContactOffsetTerrainImporterCfg` 设置 `contact_offset=0.02`、`rest_offset=0.0`，在仿真初始化前写入地形碰撞 prim，并保存到 `env.yaml`；保留连续楼梯、boxes 和单网格，不改机器人。碰撞栈暂保留 `2**29`：本次小需求读数不足以保证所有难度、摔倒状态和长期训练都适合降低容量。
+
+### 36.3 为什么 contact offset 会影响 PhysX：定义与机制推测
+
+PhysX 在两个形状的距离小于双方 contact offsets 之和时开始生成接触信息：
+
+\[
+d_{\mathrm{contact}}=c_{\mathrm{robot}}+c_{\mathrm{terrain}},
+\qquad
+d_{\mathrm{rest}}=r_{\mathrm{robot}}+r_{\mathrm{terrain}}.
+\]
+
+其中 \(c\) 是 contact offset，\(r\) 是 rest offset。前者控制提前生成接触的距离范围，后者控制静止接触的目标间距；**contact offset = 2 cm 不等于把地形抬高 2 cm，也不意味着机器人必然悬空 2 cm**。例如机器人形状取 2 mm、地形取 20 mm，则接触生成距离约为 22 mm。较大的接触范围可能生成更多接触信息，增加计算开销；过小则可能影响离散步长下的稳定性。参见 [PhysX Advanced Collision Detection](https://nvidia-omniverse.github.io/PhysX/physx/5.1.2/docs/AdvancedCollisionDetection.html)。
+
+**与结果一致、但尚未完全证实的解释**是：累计高度改变了整张地形的几何范围，可能影响导入层对自动 contact offset 的解析；偏大的有效接触范围使更多三角形进入窄阶段候选／接触处理，增加临时栈和接触资源需求，并进一步加重求解负担。显式设置 0.02 m 则限制了这一范围。这也解释了“大碰撞栈需求与慢同时出现”更可能是同一碰撞负担的两个表现，而不是“预留显存越多就必然越慢”。
+
+但目前**没有直接读取静态地形的自动后端偏移量，也没有验证它与包围盒尺寸的计算公式**，因此不能断言自动值具体多大、必然按高度跨度缩放，或候选三角形数量增加了多少。已证实的是干预效果及主要耗时 kernel，自动值解析的内部因果链仍属于假设。
+
+### 36.4 对后续频域实验的约束
+
+后续 reward 消融应固定地形接触参数、物理步长及碰撞配置，并与旧日志区分：修改 contact offset 会改变接触动力学和关节／接触力频谱，不能把这类变化误记为 frequency reward 的效果。当前短测试和小规模启动验证尚不能代替长期训练、较高地形难度、接触稳定性及步态质量验证；应在无 profiler 的正常训练中复核吞吐，并检查滑移、抖动和穿透后，再决定是否降低碰撞栈容量。

@@ -17,11 +17,14 @@ from isaaclab.managers import (
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.sensors.ray_caster.patterns import PinholeCameraPatternCfg
-from isaaclab.terrains import TerrainImporterCfg
+from isaaclab.terrains import MeshInvertedPyramidStairsTerrainCfg, MeshPyramidStairsTerrainCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
+from humanoid_isaac_freq.terrains import PerlinPlaneTerrainCfg
+from humanoid_isaac_freq.terrains.terrain_importer import ContactOffsetTerrainImporterCfg
+from humanoid_isaac_freq.terrains.trimesh.mesh_terrains_cfg import MeshPureStairsTerrainCfg
 from humanoid_isaac_freq.sensors import NoisyRayCasterCameraCfg
 from humanoid_isaac_freq.utils.noise import (
     CropAndResizeCfg,
@@ -74,7 +77,9 @@ class YMBOY12DOFPerceptionSceneCfg(InteractiveSceneCfg):
         prim_path="{ENV_REGEX_NS}/Robot"
     )
     future_robot: ArticulationCfg | None = None
-    terrain = TerrainImporterCfg(
+    terrain = ContactOffsetTerrainImporterCfg(
+        contact_offset=0.02,
+        rest_offset=0.0,
         prim_path="/World/ground",
         terrain_type="generator",
         terrain_generator=PERCEPTION_ROUGH_TERRAINS_CFG,
@@ -402,7 +407,7 @@ class YMBOY12DOFPerceptionRewardsCfg:
     wheel_vel_penalty = None
     joint_mirror = None
     applied_torque_limits = None
-    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.05)
+    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.03)
     action_smoothness = RewTerm(func=mdp.ActionSmoothnessPenalty, weight=-0.01)
     undesired_contacts = None
     contact_forces = None
@@ -427,7 +432,7 @@ class YMBOY12DOFPerceptionRewardsCfg:
     )
     feet_slide = RewTerm(
         func=mdp.feet_slide,
-        weight=-0.25,
+        weight=-0.5,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=ROBOT_FOOT_LINKS),
             "asset_cfg": SceneEntityCfg("robot", body_names=ROBOT_FOOT_LINKS),
@@ -481,7 +486,7 @@ class YMBOY12DOFPerceptionRewardsCfg:
     joint_pos_zero_penalty_knee = None
     joint_pos_zero_penalty_yaw_joint = RewTerm(
         func=mdp.joint_pos_penalty_zero,
-        weight=-5,
+        weight=-2,
         params={
             "command_name": "base_velocity",
             "asset_cfg": SceneEntityCfg(
@@ -753,9 +758,46 @@ class YMBOY12DOFPerceptionEnvCfgBase(LocomotionVelocityEnvCfg):
         self.scene.height_scanner_base.update_period = 0.0
         self.scene.camera.update_period = self.decimation * self.sim.dt
 
+        # Only for performance ablation; "none" preserves the normal terrain.
+        # Use an environment variable because Hydra overrides run after __post_init__.
+        terrain_ablation = os.environ.get("TERRAIN_ABLATION", "none")
+        if terrain_ablation not in ("none", "pure_boxes", "pure_unaligned", "pyramid", "perlin"):
+            raise ValueError(f"Unknown TERRAIN_ABLATION: {terrain_ablation!r}")
+        if terrain_ablation != "none":
+            generator = self.scene.terrain.terrain_generator
+            # Hold memory capacity fixed, including the flat-terrain control.
+            self.sim.physx.gpu_collision_stack_size = 2**29
+            generator.align_pure_stair_rows = terrain_ablation != "pure_unaligned"
+            if terrain_ablation == "perlin":
+                generator.sub_terrains = {
+                    "perlin_plane": PerlinPlaneTerrainCfg(proportion=1.0, noise_scale=0.02),
+                }
+            else:
+                for name, terrain in list(generator.sub_terrains.items()):
+                    if not isinstance(terrain, MeshPureStairsTerrainCfg):
+                        continue
+                    if terrain_ablation == "pyramid":
+                        pyramid_type = (
+                            MeshInvertedPyramidStairsTerrainCfg
+                            if terrain.direction == "up" else MeshPyramidStairsTerrainCfg
+                        )
+                        generator.sub_terrains[name] = pyramid_type(
+                            proportion=terrain.proportion,
+                            size=terrain.size,
+                            step_height_range=terrain.step_height_range,
+                            step_width=terrain.step_width,
+                            platform_width=terrain.platform_width,
+                            border_width=terrain.border_width,
+                            holes=False,
+                            flat_patch_sampling=terrain.flat_patch_sampling,
+                        )
+                    else:
+                        terrain.mesh_mode = "boxes"
+            print(f"[INFO] TERRAIN_ABLATION={terrain_ablation}; collision stack=2**29")
+
         self.rewards.track_lin_vel_xy_exp.weight = 2.0
-        self.rewards.track_ang_vel_z_exp.weight = 2.0
-        self.commands.base_velocity.ranges.lin_vel_x = (0.3, 1.5)
+        self.rewards.track_ang_vel_z_exp.weight = 3.0
+        self.commands.base_velocity.ranges.lin_vel_x = (0.3, 1.2)
 
         if os.environ.get("RSL_RL_PLAY", "0") == "1":
             self.scene.terrain.terrain_generator.num_rows = 3

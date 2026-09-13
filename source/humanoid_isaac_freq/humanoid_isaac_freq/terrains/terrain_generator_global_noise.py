@@ -63,7 +63,11 @@ class TerrainGeneratorWithGlobalNoise(TerrainGenerator):
         """Add a sub-terrain and maintain the height chain of pure-stair columns."""
         if isinstance(sub_terrain_cfg, MeshPureStairsTerrainCfg):
             left_top_z, right_top_z = self._pure_stair_edge_heights.pop(id(mesh))
-            if row == 0 or col not in self._pure_stair_previous_right_z:
+            if not self.cfg.align_pure_stair_rows:
+                # Diagnostic: keep every tile's center at its original elevation.
+                # Keep tracking the final edge for the outer-border generator.
+                z_offset = 0.0
+            elif row == 0 or col not in self._pure_stair_previous_right_z:
                 # Anchor the first tile at z=0. Later tiles meet the preceding
                 # tile exactly at their shared x boundary.
                 z_offset = -left_top_z

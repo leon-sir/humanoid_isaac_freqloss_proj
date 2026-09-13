@@ -38,6 +38,72 @@ def _side_sign(higher_side: str, lane_name: str) -> float:
     return -1.0
 
 
+def _exterior_stair_mesh(boxes: list[trimesh.Trimesh], max_face_edge: float) -> trimesh.Trimesh:
+    """Mesh the union of a tiled box height field, including its bottom and walls.
+
+    All boxes must share a bottom and tile a rectangular XY domain, as produced
+    by pure_stairs_terrain. Shared vertical faces are emitted only above the
+    lower neighbor. A common coordinate grid keeps the mesh watertight while
+    bounding face size; no collision/raycast surface outside the solid is lost.
+    """
+    if not np.isfinite(max_face_edge) or max_face_edge <= 0.0:
+        raise ValueError("max_face_edge must be finite and positive")
+    bounds = np.asarray([box.bounds for box in boxes])
+
+    def coordinates(values):
+        knots = np.unique(np.round(values, decimals=10))
+        return np.concatenate(
+            [
+                np.linspace(a, b, max(1, int(np.ceil((b - a) / max_face_edge))), endpoint=False)
+                for a, b in zip(knots[:-1], knots[1:])
+            ]
+            + [knots[-1:]]
+        )
+
+    xs = coordinates(bounds[:, :, 0].ravel())
+    ys = coordinates(bounds[:, :, 1].ravel())
+    zs = coordinates(bounds[:, :, 2].ravel())
+    xc, yc = (xs[:-1] + xs[1:]) / 2, (ys[:-1] + ys[1:]) / 2
+    heights = np.full((len(xc), len(yc)), np.nan)
+    for lo, hi in bounds:
+        mask = (
+            (xc[:, None] > lo[0]) & (xc[:, None] < hi[0])
+            & (yc[None, :] > lo[1]) & (yc[None, :] < hi[1])
+        )
+        heights[mask] = hi[2]
+    if not np.isfinite(heights).all():
+        raise ValueError("Pure-stair boxes must tile the entire XY domain")
+    tops = np.abs(heights[:, :, None] - zs).argmin(axis=-1)
+    vertices, faces = [], []
+    vertex_ids = {}
+
+    def quad(corners):
+        ids = []
+        for key in corners:
+            if key not in vertex_ids:
+                vertex_ids[key] = len(vertices)
+                i, j, k = key
+                vertices.append((xs[i], ys[j], zs[k]))
+            ids.append(vertex_ids[key])
+        faces.extend(((ids[0], ids[1], ids[2]), (ids[0], ids[2], ids[3])))
+
+    nx, ny = tops.shape
+    for i in range(nx):
+        for j in range(ny):
+            top = tops[i, j]
+            quad(((i, j, top), (i+1, j, top), (i+1, j+1, top), (i, j+1, top)))
+            quad(((i, j, 0), (i, j+1, 0), (i+1, j+1, 0), (i+1, j, 0)))
+            for k in range(tops[i-1, j] if i else 0, top):
+                quad(((i, j, k), (i, j, k+1), (i, j+1, k+1), (i, j+1, k)))
+            for k in range(tops[i+1, j] if i+1 < nx else 0, top):
+                quad(((i+1, j, k), (i+1, j+1, k), (i+1, j+1, k+1), (i+1, j, k+1)))
+            for k in range(tops[i, j-1] if j else 0, top):
+                quad(((i, j, k), (i+1, j, k), (i+1, j, k+1), (i, j, k+1)))
+            for k in range(tops[i, j+1] if j+1 < ny else 0, top):
+                quad(((i, j+1, k), (i, j+1, k+1), (i+1, j+1, k+1), (i+1, j+1, k)))
+    return trimesh.Trimesh(vertices=np.asarray(vertices), faces=np.asarray(faces), process=False)
+
+
 def _single_side_stair_height_magnitudes(num_steps: int, step_height: float) -> list[float]:
     if num_steps <= 1:
         return [0.5 * step_height]
@@ -198,6 +264,12 @@ def pure_stairs_terrain(
         meshes_list.append(
             _make_top_box(stair_x_min, stair_x_max, stair_y_max, cfg.size[1], 0.0, bottom_z)
         )
+
+    mesh_mode = getattr(cfg, "mesh_mode", "surface")
+    if mesh_mode == "surface":
+        meshes_list = [_exterior_stair_mesh(meshes_list, getattr(cfg, "max_face_edge", 1.0))]
+    elif mesh_mode != "boxes":
+        raise ValueError(f"Unsupported pure-stair mesh_mode: {mesh_mode!r}")
 
     origin = np.array([x_mid, 0.5 * cfg.size[1], 0.0])
     return meshes_list, origin

@@ -73,17 +73,38 @@ The perception baseline and frequency-reward variant use the same
 `rsl_rl_dream` CNN-LSTM PPO runner and write runs to
 `logs/rsl_rl/rough_12dof_perception_rnn/` with distinct run-name suffixes.
 
+Both perception tasks explicitly configure terrain `contact_offset=0.02` m and
+`rest_offset=0.0` m in `scene.terrain` (serialized in `params/env.yaml`). The
+terrain importer applies these before simulation initialization; robot offsets
+are unchanged. Continuous pure stairs use the original `boxes` mesh and a single
+terrain collider. The collision stack remains `2**29` pending long-run validation.
+Existing train/play commands need no extra flags; leave `TERRAIN_ABLATION` unset
+for normal training. Explicit contact offsets avoid the measured automatic-offset
+narrowphase overhead; changing contact offsets can also change policy trajectories.
+See [PhysX contact tuning](https://nvidia-omniverse.github.io/PhysX/physx/5.1.2/docs/AdvancedCollisionDetection.html).
+
 ```bash
 RSL_RL_DREAM_ENABLE_CUDNN_RNN=1 python scripts/rsl_rl_dream/train.py \
   --task=DreamLab-Velocity-Rough-YMBOY12DOF-Perception-RNN-Base-v0 \
   --headless \
-  --no-export_network_structure
+  --max_iterations=3000
 
 RSL_RL_DREAM_ENABLE_CUDNN_RNN=1 python scripts/rsl_rl_dream/train.py \
   --task=DreamLab-Velocity-Rough-YMBOY12DOF-Perception-RNN-FreqReward-v0 \
   --headless \
-  --no-export_network_structure
+  --export_network_structure
 ```
+
+Training exports the actor network diagram once before PPO updates, by default:
+`<run-directory>/exported/EncoderRNNModel_network_structure.png` for the perception
+CNN-LSTM actor. This is a structure diagram, not an exported inference policy.
+Use `--no-export_network_structure` to skip, `--network_structure_format svg`
+(or `pdf`) for vector output, `--network_structure_direction LR` for horizontal
+layout, and `--network_structure_dpi 300` for higher-resolution PNG.
+Export traces a separate model copy using one observation on CPU. Failures emit
+a warning and do not stop training. Dependencies are `torchview`, Python
+`graphviz`, and the Graphviz `dot` executable; install missing Python packages
+in the training environment with `pip install torchview graphviz`.
 
 Play a selected baseline or frequency-reward run without exporting the policy:
 
@@ -142,6 +163,38 @@ Training outputs are written under `logs/rsl_rl/flat_12dof_time_reward/`,
 `logs/rsl_rl/flat_12dof_freq_ablation_1/`.
 
 ## Configuration layout
+
+### Retargeted mocap replay and spectrum analysis (21 DOF)
+
+```bash
+python scripts/collector/collect_mocap_data_analysis_scale.py
+# Another clip:
+python scripts/collector/collect_mocap_data_analysis_scale.py --csv <motion.csv>
+```
+
+Run in the Isaac Lab conda environment. Defaults: 120 Hz source CSV,
+50 Hz playback/sampling, 250 warmup samples (5 s), then 750 samples (15 s),
+25 Hz plot limit. Playback stops after that window. Use `--headless --fast`
+for non-interactive analysis. All 21 joint angles are assigned absolutely,
+without clipping or PD tracking. Root translation is converted cm to m,
+Euler/joint angles degrees to radians. Linear resampling has no anti-alias
+filter; source content above 25 Hz can alias at the default output rate.
+
+Results (radian/normalized CSV, spectrum CSV/plots, summary and metadata) go to
+`scripts/output/spectrum_mocap_analysis/<datetime>_<motion-name>/`.
+FFT normalization matches the policy collector; the plotted power is raw
+single-sided Hann-window FFT power, while the summary also reports power
+divided by Hann-window energy. Leg scales/defaults are unchanged; provisional
+waist/arm scales are 0.25/0.5 rad, with zero upper-body default posture.
+
+`assets/ymbot_boy_21dof.py` uses `ymboy_21dof_training.urdf`: the supplied
+21-DOF upper body with the existing 12-DOF leg joints and child links.
+The original URDF is retained. Upper-body meshes come from soma-retargeter's
+`assets/robots/ymbot_e/meshes`. Arm actuator tuning follows AMPMINIMAL and
+is not a claim of hardware-safe motor limits. Joint-limit violations during
+replay are retained and counted in metadata.
+
+CPU normalization regression: `python test/test_mocap_spectrum.py`.
 
 - `ymboy_12dof_envcfg_base.py` contains the robot task, observations, actions, domain randomization, terminations, and task rewards.
 - `ymboy_12dof_envcfg_time_rewards.py` adds the baseline time-domain joint and action regularization.

@@ -36,8 +36,11 @@ parser.add_argument(
     "--export_network_structure",
     action=argparse.BooleanOptionalAction,
     default=True,
-    help="Compatibility flag; use --no-export_network_structure to skip graph export.",
+    help="Export the actor network graph before training; use --no-export_network_structure to disable.",
 )
+parser.add_argument("--network_structure_format", choices=("png", "pdf", "svg"), default="png")
+parser.add_argument("--network_structure_direction", choices=("TB", "LR", "BT", "RL"), default="TB")
+parser.add_argument("--network_structure_dpi", type=int, default=150)
 parser.add_argument(
     "--ray-proc-id", "-rid", type=int, default=None, help="Automatically configured by Ray integration, otherwise None."
 )
@@ -227,6 +230,20 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # dump the configuration into log-directory
     dump_yaml(os.path.join(log_dir, "params", "env.yaml"), env_cfg)
     dump_yaml(os.path.join(log_dir, "params", "agent.yaml"), agent_cfg)
+
+    if args_cli.export_network_structure and getattr(runner, "gpu_global_rank", 0) == 0:
+        try:
+            from script_utils.network_structure import export_runner_network_structure
+
+            graph_path = export_runner_network_structure(
+                runner, agent_cfg, env.get_observations(), os.path.join(log_dir, "exported"),
+                output_format=args_cli.network_structure_format,
+                graph_dir=args_cli.network_structure_direction,
+                dpi=args_cli.network_structure_dpi if args_cli.network_structure_format == "png" else None,
+            )
+            print(f"[INFO] Exported network structure graph to: {graph_path}")
+        except Exception as exc:
+            print(f"[WARN] Network structure export failed: {exc}. Training will continue.")
 
     # run training
     runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)

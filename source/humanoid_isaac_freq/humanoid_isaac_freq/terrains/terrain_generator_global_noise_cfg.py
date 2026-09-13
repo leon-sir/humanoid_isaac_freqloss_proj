@@ -19,6 +19,9 @@ class TerrainGeneratorWithGlobalNoiseCfg(TerrainGeneratorCfg):
     num_flat_start_rows: int = 0
     """Number of leading curriculum rows generated at exactly zero difficulty."""
 
+    align_pure_stair_rows: bool = True
+    """Join pure-stair rows in height. False is a diagnostic with discontinuous seams."""
+
     align_terminal_border_height: bool = False
     """Whether to align the positive-x border with each pure-stair column's final height.
 

@@ -1,0 +1,230 @@
+{
+  "source": "/home/ps/pan_zheng_proj/humanoid_isaac23_freq_proj/source/humanoid_isaac_freq/humanoid_isaac_freq/datasets/motions/Neutral_walk_forward_005__A057/Neutral_walk_forward_005__A057_periodic.csv",
+  "spectrum": "/home/ps/pan_zheng_proj/humanoid_isaac23_freq_proj/scripts/output/spectrum_mocap_analysis/2026-09-10_10-54-28_065592_Neutral_walk_forward_005__A057_periodic/runner_joint_power_scale.csv",
+  "fps": 120.0,
+  "frequency_hz": 0.8571428571428571,
+  "fit_samples": 140,
+  "output_samples": 3601,
+  "symmetry": false,
+  "symmetry_pairs": [],
+  "formula": "q_j(t) = c_j + a_j*cos(2*pi*f0*t) + b_j*sin(2*pi*f0*t)",
+  "notes": [
+    "Only joint columns changed; root translation/rotation preserved exactly.",
+    "Spectrum is diagnostic only, not inverted: its Hann window and removed mean cannot restore absolute posture.",
+    "DC coefficients retained; optional symmetry rescales AC amplitude, never clips joint limits.",
+    "Symmetry averages cycle AC energy in deg^2; equal normalized energy assumes matching bilateral scales.",
+    "Root may retain harmonics; contact, joint limits and dynamic feasibility are NOT guaranteed."
+  ],
+  "joints": {
+    "left_hip_pitch_joint": {
+      "mean_deg": -9.440760786022686,
+      "cos_deg": -15.868399871727132,
+      "input_amplitude_deg": 18.505150344027374,
+      "sin_deg": -9.52021400841529,
+      "amplitude_deg": 18.505150344027374,
+      "residual_rms_deg": 2.688017139369373,
+      "explained_variance": 0.959509055720173,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "left_hip_roll_joint": {
+      "mean_deg": 2.0775684142362687,
+      "cos_deg": 12.917850585664329,
+      "input_amplitude_deg": 13.46969357060183,
+      "sin_deg": -3.815990190286663,
+      "amplitude_deg": 13.46969357060183,
+      "residual_rms_deg": 2.086884440423371,
+      "explained_variance": 0.95419141560621,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "left_hip_yaw_joint": {
+      "mean_deg": 20.48727662644846,
+      "cos_deg": 0.3175144468517124,
+      "input_amplitude_deg": 3.7740727824677016,
+      "sin_deg": 3.7606927478064396,
+      "amplitude_deg": 3.7740727824677016,
+      "residual_rms_deg": 1.729586352653081,
+      "explained_variance": 0.7042039311017387,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "left_knee_joint": {
+      "mean_deg": 29.397604863376117,
+      "cos_deg": 15.627391665786014,
+      "input_amplitude_deg": 26.819572030022897,
+      "sin_deg": -21.796194016334784,
+      "amplitude_deg": 26.819572030022897,
+      "residual_rms_deg": 16.03008418788121,
+      "explained_variance": 0.5832628423652182,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "left_ankle_pitch_joint": {
+      "mean_deg": -10.164990585933566,
+      "cos_deg": 8.047956423122086,
+      "input_amplitude_deg": 8.218760346771697,
+      "sin_deg": -1.666859036989869,
+      "amplitude_deg": 8.218760346771697,
+      "residual_rms_deg": 6.71841770864752,
+      "explained_variance": 0.4280005038959174,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "left_ankle_roll_joint": {
+      "mean_deg": -2.657405466653994,
+      "cos_deg": -3.0062979153488065,
+      "input_amplitude_deg": 3.927979009377375,
+      "sin_deg": 2.5280806834985876,
+      "amplitude_deg": 3.927979009377375,
+      "residual_rms_deg": 4.468640118731045,
+      "explained_variance": 0.2786706191545867,
+      "input_spectrum_peak_hz": 1.7333333333333334
+    },
+    "right_hip_pitch_joint": {
+      "mean_deg": -11.67998180397523,
+      "cos_deg": 15.283741240818319,
+      "input_amplitude_deg": 17.31502712928013,
+      "sin_deg": 8.137408566086389,
+      "amplitude_deg": 17.31502712928013,
+      "residual_rms_deg": 2.5378446404128283,
+      "explained_variance": 0.9588050463341309,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "right_hip_roll_joint": {
+      "mean_deg": 1.696262893212144,
+      "cos_deg": 8.031908011180278,
+      "input_amplitude_deg": 9.522546385283004,
+      "sin_deg": -5.115402560874801,
+      "amplitude_deg": 9.522546385283004,
+      "residual_rms_deg": 2.1378315597615996,
+      "explained_variance": 0.9084282715509475,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "right_hip_yaw_joint": {
+      "mean_deg": -2.652167954458166,
+      "cos_deg": 3.953835743987929,
+      "input_amplitude_deg": 4.310666742386643,
+      "sin_deg": 1.7172741986886364,
+      "amplitude_deg": 4.310666742386643,
+      "residual_rms_deg": 1.673094088417818,
+      "explained_variance": 0.7684693963152354,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "right_knee_joint": {
+      "mean_deg": 30.336392050232718,
+      "cos_deg": -10.510809007520102,
+      "input_amplitude_deg": 24.67029936154653,
+      "sin_deg": 22.31919722113135,
+      "amplitude_deg": 24.67029936154653,
+      "residual_rms_deg": 15.088820335511157,
+      "explained_variance": 0.5720315723785441,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "right_ankle_pitch_joint": {
+      "mean_deg": -7.827536108345621,
+      "cos_deg": -6.653893918225781,
+      "input_amplitude_deg": 6.688197651162019,
+      "sin_deg": 0.6765231304302297,
+      "amplitude_deg": 6.688197651162019,
+      "residual_rms_deg": 5.996867284599854,
+      "explained_variance": 0.3834493941035314,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "right_ankle_roll_joint": {
+      "mean_deg": -0.6836864875350351,
+      "cos_deg": -3.093528938180963,
+      "input_amplitude_deg": 3.0951160059370753,
+      "sin_deg": 0.09910498900073583,
+      "amplitude_deg": 3.0951160059370753,
+      "residual_rms_deg": 3.8173672387047395,
+      "explained_variance": 0.24738306629959184,
+      "input_spectrum_peak_hz": 1.7333333333333334
+    },
+    "waist_yaw_joint": {
+      "mean_deg": -1.7796164129267276,
+      "cos_deg": 11.292096816609961,
+      "input_amplitude_deg": 13.810849514334492,
+      "sin_deg": 7.951610767127657,
+      "amplitude_deg": 13.810849514334492,
+      "residual_rms_deg": 1.8577109328624204,
+      "explained_variance": 0.965077317797338,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "left_shoulder_pitch_joint": {
+      "mean_deg": 1.4591123023934212,
+      "cos_deg": 14.094198787929322,
+      "input_amplitude_deg": 19.235841511453984,
+      "sin_deg": 13.090880764108574,
+      "amplitude_deg": 19.235841511453984,
+      "residual_rms_deg": 2.4756982341126927,
+      "explained_variance": 0.967933715117209,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "left_shoulder_roll_joint": {
+      "mean_deg": 27.02685441554655,
+      "cos_deg": -1.6640429949890403,
+      "input_amplitude_deg": 2.788970090879374,
+      "sin_deg": -2.238149923183791,
+      "amplitude_deg": 2.788970090879374,
+      "residual_rms_deg": 1.0002308847391717,
+      "explained_variance": 0.7953914712564859,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "left_shoulder_yaw_joint": {
+      "mean_deg": -31.903409176158803,
+      "cos_deg": -4.5578073543304924,
+      "input_amplitude_deg": 4.619219369015764,
+      "sin_deg": 0.75071945485732,
+      "amplitude_deg": 4.619219369015764,
+      "residual_rms_deg": 2.887021218689518,
+      "explained_variance": 0.5614019542919806,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "left_elbow_joint": {
+      "mean_deg": 61.35750570639332,
+      "cos_deg": 8.007550241420244,
+      "input_amplitude_deg": 10.47587145290984,
+      "sin_deg": -6.754481610680563,
+      "amplitude_deg": 10.47587145290984,
+      "residual_rms_deg": 3.3533418619052338,
+      "explained_variance": 0.8299237965096291,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "right_shoulder_pitch_joint": {
+      "mean_deg": -3.032206475469229,
+      "cos_deg": -12.559583737138087,
+      "input_amplitude_deg": 16.96642152032524,
+      "sin_deg": -11.406853885062784,
+      "amplitude_deg": 16.96642152032524,
+      "residual_rms_deg": 1.3513252128610216,
+      "explained_variance": 0.9874716497544074,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "right_shoulder_roll_joint": {
+      "mean_deg": -28.456652643595937,
+      "cos_deg": -0.4228458454219619,
+      "input_amplitude_deg": 1.0092124754398515,
+      "sin_deg": -0.9163575784554953,
+      "amplitude_deg": 1.0092124754398515,
+      "residual_rms_deg": 0.399106628913555,
+      "explained_variance": 0.7617407182288738,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "right_shoulder_yaw_joint": {
+      "mean_deg": 44.54670161067233,
+      "cos_deg": -9.741837235620594,
+      "input_amplitude_deg": 10.141670166409614,
+      "sin_deg": -2.8195888067090413,
+      "amplitude_deg": 10.141670166409614,
+      "residual_rms_deg": 4.880363113119682,
+      "explained_variance": 0.6834600957837038,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    },
+    "right_elbow_joint": {
+      "mean_deg": 41.996463940988534,
+      "cos_deg": -9.922340914049611,
+      "input_amplitude_deg": 10.028612659180034,
+      "sin_deg": 1.4560984352862771,
+      "amplitude_deg": 10.028612659180034,
+      "residual_rms_deg": 2.33542778656929,
+      "explained_variance": 0.9021501849660666,
+      "input_spectrum_peak_hz": 0.8666666666666667
+    }
+  }
+}

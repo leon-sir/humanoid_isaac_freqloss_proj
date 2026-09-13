@@ -8,6 +8,7 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import os
 import sys
 
 from isaaclab.app import AppLauncher
@@ -39,6 +40,9 @@ cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
+
+# Publish the CLI stage before task modules/configclasses are imported.
+os.environ["RSL_RL_RESUME"] = "1" if getattr(args_cli, "resume", False) else "0"
 
 # always enable cameras to record video
 if args_cli.video:
@@ -76,7 +80,6 @@ if version.parse(installed_version) < version.parse(RSL_RL_VERSION):
 """Rest everything follows."""
 
 import logging
-import os
 import time
 from datetime import datetime
 

@@ -233,7 +233,11 @@ def _robot_fundamental(
 
 
 class JointDcPosturePenalty(ManagerTermBase):
-    """Penalize selected joints' window mean posture with command-conditioned moving limits."""
+    """Penalize window-mean error relative to a normalized DC target.
+
+    ``target_dc`` is in (q - default_q) / joint_scale units, not radians.
+    Zero preserves the original default-posture objective.
+    """
 
     def __init__(self, cfg: RewardTermCfg, env):
         super().__init__(cfg, env)
@@ -253,6 +257,17 @@ class JointDcPosturePenalty(ManagerTermBase):
                     raise ValueError(f"joint_names pattern {pattern!r} matched no configured analyzer joints")
                 joint_names.extend(name for name in matches if name not in joint_names)
         self.joint_indices = self.analyzer.joint_indices(joint_names)
+        target_dc = cfg.params.get("target_dc", 0.0)
+        if isinstance(target_dc, dict):
+            missing = [name for name in joint_names if name not in target_dc]
+            if missing:
+                raise ValueError(f"target_dc is missing joints: {missing}")
+            targets = [float(target_dc[name]) for name in joint_names]
+        else:
+            targets = [float(target_dc)] * len(joint_names)
+        if not all(math.isfinite(value) for value in targets):
+            raise ValueError("target_dc values must be finite")
+        self.target_dc = torch.tensor(targets, device=env.device)
         moving_dc_limit = cfg.params["moving_dc_limit"]
         if isinstance(moving_dc_limit, dict):
             missing = [name for name in joint_names if name not in moving_dc_limit]
@@ -274,10 +289,11 @@ class JointDcPosturePenalty(ManagerTermBase):
         stand_command_threshold: float,
         moving_dc_limit: float | dict[str, float],
         joint_names: str | Sequence[str] | None = None,
+        target_dc: float | dict[str, float] = 0.0,
     ) -> torch.Tensor:
-        del analyzer_cfg, moving_dc_limit, joint_names
+        del analyzer_cfg, moving_dc_limit, joint_names, target_dc
         self.analyzer.update_once(env)
-        mean = self.analyzer.cached_mean[:, self.joint_indices]
+        mean = self.analyzer.cached_mean[:, self.joint_indices] - self.target_dc
         stand_penalty = mean.square().mean(dim=-1)
         move_excess = torch.relu(mean.abs() - self.moving_dc_limit)
         move_penalty = move_excess.square().mean(dim=-1)

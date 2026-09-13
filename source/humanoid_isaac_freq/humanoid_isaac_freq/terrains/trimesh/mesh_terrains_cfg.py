@@ -47,6 +47,16 @@ class MeshPureStairsTerrainCfg(SubTerrainBaseCfg):
 
     function = mesh_terrains.pure_stairs_terrain
 
+    mesh_mode: Literal["surface", "boxes"] = "surface"
+    """Use an exterior-only mesh, or the original box mesh for comparisons."""
+
+    max_face_edge: float = 1.0
+    """Maximum axis-aligned quad edge in meters for the surface mesh.
+
+    Triangle diagonals can be sqrt(2) times this value. Bounded faces avoid
+    terrain-wide triangles in collision and ray-query acceleration structures.
+    """
+
     step_height_range: tuple[float, float] = MISSING
     """The min/max height difference between adjacent steps in m."""
 
