@@ -155,6 +155,45 @@ class FundamentalEnergyMatch_v2(_Term):
         return self.gate(relative_error.square().mean(dim=-1))
 
 
+class ReferenceBandEnergyReward(_Term):
+    """Bounded minimum band-energy reward, not an exact amplitude penalty.
+
+    Targets use the same demeaned Hann spectrum as training, averaged over
+    reference start phases. Standing commands receive zero; velocity is not used
+    to discount the target. Legacy exact-f0 reward classes remain unchanged.
+    """
+
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        a = self.stats.analyzer
+        low, high = cfg.params['energy_band_hz']
+        ratio = cfg.params['reference_energy_ratio']
+        if not 0 < low < high <= 0.5 / a.step_dt or not 0 < ratio <= 1:
+            raise ValueError('Expected positive sub-Nyquist band and reference_energy_ratio in (0, 1]')
+        self.band = (a.freq >= low) & (a.freq <= high)
+        if not self.band.any():
+            raise ValueError('Energy band contains no FFT bins')
+        phase = torch.arange(64, device=env.device) * (2 * math.pi / 64)
+        t = torch.arange(a.window_size, device=env.device) * a.step_dt
+        signal = torch.cos(2 * math.pi * self.stats.f0 * t[None, :] + phase[:, None])
+        signal = (signal - signal.mean(-1, keepdim=True)) * a.window[None, :]
+        power = torch.fft.rfft(signal, norm='ortho').abs().square()
+        power[:, 1:-1 if a.window_size % 2 == 0 else None] *= 2
+        unit_energy = power[:, self.band].sum(-1).mean() / a.window_energy
+        target = unit_energy * self.stats.target_fundamental_amplitude[self.ids].square() * ratio
+        self.target = target.clamp_min(cfg.params.get('energy_floor', 1.e-4))
+        self.command = env.command_manager.get_term(cfg.params['command_name'])
+
+    def __call__(self, env, joint_names, energy_band_hz, reference_energy_ratio,
+                 command_name, energy_floor=1.e-4):
+        self.stats.update(env)
+        a = self.stats.analyzer
+        energy = a.cached_power[:, self.ids][:, :, self.band].sum(-1) / a.window_energy
+        score = (energy / self.target).clamp(0, 1).mean(-1)
+        valid = a.cached_ready & ~self.command.is_standing_env
+        return torch.where(valid, score, torch.zeros_like(score))
+
+
 class ReferenceDcMatch(JointDcPosturePenalty):
     """Squared DC penalty using the selected reference, rather than default pose.
 

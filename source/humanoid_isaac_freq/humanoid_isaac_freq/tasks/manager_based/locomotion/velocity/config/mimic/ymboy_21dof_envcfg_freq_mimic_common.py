@@ -603,8 +603,8 @@ class YMBOY21DOFTimeOnlyRewardsCfg:
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=".*")},
     )
     joint_pos_penalty = RewTerm(
-        func=mdp.joint_pos_penalty,
-        # func=mimic_mdp.JointPosPenaltyMimic,
+        # func=mdp.joint_pos_penalty,
+        func=mimic_mdp.JointPosPenaltyMimic,
         weight=-0.05,
         params={
             "command_name": "base_velocity",
@@ -699,7 +699,7 @@ class YMBOY21DOFFrequencyMimicEnvCfgBase(LocomotionVelocityEnvCfg):
         # command.ranges.lin_vel_x = (REFERENCE_FORWARD_SPEED-FORWARD_SPEED_HALF_RANGE,
         #                             REFERENCE_FORWARD_SPEED+FORWARD_SPEED_HALF_RANGE)
         if firstStage:
-            self.commands.base_velocity.ranges.lin_vel_x = (0.0, 1.0)
+            self.commands.base_velocity.ranges.lin_vel_x = (0.4, 1.0)
         else:
             reference_speed = self.reference_motion['reference_forward_speed_mps']
             self.commands.base_velocity.ranges.lin_vel_x = (reference_speed-0.5, reference_speed+0.1)

@@ -15,6 +15,7 @@ from humanoid_isaac_freq.tasks.manager_based.locomotion.velocity.mdp.freq_reward
 )
 
 from . import mdp as mimic_mdp
+from humanoid_isaac_freq.tasks.manager_based.locomotion.velocity.mdp.events import reset_root_state_uniform_body_frame
 from .reference_motion import load_reference_motion
 from .ymboy_21dof_envcfg_freq_mimic_common import (
     ACTUATED_JOINT_NAMES,
@@ -34,6 +35,8 @@ from .ymboy_21dof_envcfg_freq_mimic_common import (
 REFERENCE_MOTION = "Neutral_walk_forward_002__A057"
 REFERENCE_MOTION_FILE = f"{REFERENCE_MOTION}/{REFERENCE_MOTION}_periodic_filtered.csv"
 REFERENCE_HARMONIC_COUNT = 5
+CORE_ENERGY_BAND_HZ = (0.5, 1.5)
+CORE_REFERENCE_ENERGY_RATIO = 0.25
 
 _reference_path = Path(REFERENCE_MOTION_FILE).expanduser()
 if not _reference_path.is_absolute():
@@ -66,9 +69,12 @@ class YMBOY21DOFFrequencyOnlyRewardsCfg_v1:
     """Current frequency MDP with core bilateral and limb-chain phase terms."""
 
     spectral_fundamental_energy_match_core = RewTerm(
-        func=mimic_mdp.FundamentalEnergyMatch_v2,
-        weight=-4.0,
-        params={"joint_names": CORE_FREQUENCY_JOINTS, "amplitude_floor": 0.1},
+        func=mimic_mdp.ReferenceBandEnergyReward,
+        weight=2.0,
+        params={"joint_names": CORE_FREQUENCY_JOINTS,
+                "energy_band_hz": CORE_ENERGY_BAND_HZ,
+                "reference_energy_ratio": CORE_REFERENCE_ENERGY_RATIO,
+                "command_name": "base_velocity", "energy_floor": 1.e-4},
     )
     spectral_fundamental_energy_match_other = RewTerm(
         func=mimic_mdp.FundamentalEnergyMatch_v2,
@@ -146,6 +152,12 @@ class YMBOY21DOFFrequencyMimicEnvCfg_v1(YMBOY21DOFFrequencyMimicEnvCfgBase):
         window_duration_s=2.0,
         fft_update_interval=5,
     )
+
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.events.randomize_reset_base.func = reset_root_state_uniform_body_frame
+        self.events.randomize_reset_base.params["velocity_range"]["x"] = (0.4, 0.8)
 
 
 @configclass

@@ -16,6 +16,36 @@ if TYPE_CHECKING:
     # from humanoid_isaac_freq.tasks.manager_based.locomotion.velocity.config.humanoid.ymboy_flip.env.manager_based_rl_env import MyManagerBasedRLYMEnv
 
 
+def reset_root_state_uniform_body_frame(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor,
+    pose_range: dict[str, tuple[float, float]],
+    velocity_range: dict[str, tuple[float, float]],
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+):
+    """Reset pose as usual, but sample linear/angular velocity in the new body frame.
+
+    Ported from Dash skating. Pose translation remains in world coordinates.
+    Use the freshly sampled quaternion directly, independent of simulator caches.
+    Default root velocity components are interpreted in body coordinates.
+    """
+    asset = env.scene[asset_cfg.name]
+    state = asset.data.default_root_state[env_ids].clone()
+    keys = ("x", "y", "z", "roll", "pitch", "yaw")
+    ranges = torch.tensor([pose_range.get(k, (0., 0.)) for k in keys], device=asset.device)
+    pose = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (len(env_ids), 6), device=asset.device)
+    position = state[:, :3] + env.scene.env_origins[env_ids] + pose[:, :3]
+    orientation = math_utils.quat_mul(
+        state[:, 3:7], math_utils.quat_from_euler_xyz(pose[:, 3], pose[:, 4], pose[:, 5]))
+    ranges = torch.tensor([velocity_range.get(k, (0., 0.)) for k in keys], device=asset.device)
+    velocity = state[:, 7:13] + math_utils.sample_uniform(
+        ranges[:, 0], ranges[:, 1], (len(env_ids), 6), device=asset.device)
+    velocity_w = torch.cat((math_utils.quat_apply(orientation, velocity[:, :3]),
+                            math_utils.quat_apply(orientation, velocity[:, 3:])), dim=-1)
+    asset.write_root_pose_to_sim(torch.cat((position, orientation), dim=-1), env_ids=env_ids)
+    asset.write_root_velocity_to_sim(velocity_w, env_ids=env_ids)
+
+
 def randomize_rigid_body_inertia(
     env: ManagerBasedEnv,
     env_ids: torch.Tensor | None,

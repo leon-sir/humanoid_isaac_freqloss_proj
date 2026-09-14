@@ -42,6 +42,22 @@ python scripts/collector/filter_mocap_fundamental.py \
 
 ## Resume 阶段标记
 
+### V1 最新实验覆盖项
+
+V1的 `spectral_fundamental_energy_match_core` 现使用 `ReferenceBandEnergyReward`，
+权重 **+2**（不再是下文历史表中的-4幅值L2）。`CORE_ENERGY_BAND_HZ=(0.5,1.5)`，
+`CORE_REFERENCE_ENERGY_RATIO=0.25`：对参考正弦按训练窗口去均值、Hann归一化，
+取64个起始相位的平均频带能量，乘0.25作为各关节最低门槛（下限1e-4）。
+得分为逐关节 `clamp(E_band / E_target, 0, 1)` 的均值；command term的
+`is_standing_env=True` 或窗口未满时返回0。不按速度缩放，其他频域项尚未添加standing门控。
+此修改应用于V1两阶段；other幅值项与相位/非谐波约束仍沿用原来的参考频率逻辑，
+因此不是所有频域约束都已放宽到整个频段。V0不变。
+
+V1 root reset 改用 `reset_root_state_uniform_body_frame`，初始机身系纵向速度
+范围为 `(0.4,0.8)` m/s，其余pose/velocity范围不变。线速度和角速度均按新采样
+姿态旋转到世界系；standing env也会获得该初速度。当前TimeReward对照类继承V1，
+因此也继承这个reset设置。用户已有速度指令配置不改动。
+
 主频幅值和DC在两个阶段都拆为核心4关节与其他17关节，核心项使用更强权重。
 左右相位已拆为核心2组和其他8组；当前只启用hip/shoulder pitch核心项，
 其他8组配置保留为注释。链内参考相位项负责hip pitch到knee、
@@ -258,7 +274,7 @@ V1只写 `--resume` 会按 `load_run=".*_freq_mimic_v1"` 和 `model_.*.pt` 选�
 ```bash
 python scripts/rsl_rl/play.py \
   --task FreqLab-Velocity-Flat-YMBOY21DOF-FreqMimic-V1 --num_envs 32 \
-  --checkpoint logs/rsl_rl/flat_21dof_freq_mimic/2026-09-11_16-45-55_freq_mimic_scaffold/model_11998.pt
+  --checkpoint logs/rsl_rl/flat_21dof_freq_mimic/2026-09-13_14-44-26_freq_mimic_v1/model_4000.pt
 ```
 
 21DOF模型与12DOF策略维度不同，不能直接加载12DOF checkpoint。

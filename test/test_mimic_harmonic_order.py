@@ -63,10 +63,11 @@ def main():
     config_path = path.parent.parent / 'ymboy_21dof_envcfg_freq_mimic_v1.py'
     node = next(n for n in ast.parse(config_path.read_text()).body
                 if isinstance(n, ast.ClassDef) and n.name == 'YMBOY21DOFFrequencyOnlyRewardsCfg_v1')
-    functions = ['FundamentalEnergyMatch_v2', 'ReferenceDcMatch', 'BilateralPhaseMatch',
+    functions = ['ReferenceBandEnergyReward', 'FundamentalEnergyMatch_v2', 'ReferenceDcMatch', 'BilateralPhaseMatch',
                  'CrossLimbPhaseMatch', 'KinematicChainPhaseMatch', 'NonHarmonicEnergyPenalty']
     for stage in (1, 0):
         scope = dict(configclass=lambda cls: cls, RewTerm=NS, firstStage=stage,
+                     CORE_ENERGY_BAND_HZ=(.5, 1.5), CORE_REFERENCE_ENERGY_RATIO=.25,
                      mimic_mdp=NS(**{name: name for name in functions}),
                      CORE_FREQUENCY_JOINTS=['core'], OTHER_FREQUENCY_JOINTS=['other'],
                      CORE_BILATERAL_PHASE_PAIRS=[], CROSS_LIMB_PHASE_PAIRS=[],

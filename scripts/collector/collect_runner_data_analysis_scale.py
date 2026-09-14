@@ -82,9 +82,9 @@ match PROFILE:
         COMMAND_VEL = 0.6
         JOINT_SCALES = dict(LEG_JOINT_SCALES)
     case "freq_mimic":
-        TASK_NAME = "FreqLab-Velocity-Flat-YMBOY21DOF-FreqMimic"
+        TASK_NAME = "FreqLab-Velocity-Flat-YMBOY21DOF-FreqMimic-V1"
         CHECK_POINT = (
-            "logs/rsl_rl/flat_21dof_freq_mimic/2026-09-12_23-04-17_freq_mimic_scaffold/model_11998.pt"
+            "logs/rsl_rl/flat_21dof_freq_mimic/2026-09-13_20-05-11_freq_mimic_v1/model_5999.pt"
         )
         # The selected 002 reference motion averages about 0.94893 m/s forward.
         COMMAND_VEL = 0.9489283781915138

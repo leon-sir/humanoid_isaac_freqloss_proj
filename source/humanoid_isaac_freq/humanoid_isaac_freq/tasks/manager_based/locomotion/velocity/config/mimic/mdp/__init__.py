@@ -4,3 +4,4 @@ from .freq_rewards import (FundamentalEnergyMatch, FundamentalEnergyMatch_v2,
                           CrossLimbPhaseMatch, KinematicChainPhaseMatch, OutOfBandEnergy,
                           NonHarmonicEnergyPenalty)
 from .rewards import JointPosPenaltyMimic
+from .freq_rewards import ReferenceBandEnergyReward
