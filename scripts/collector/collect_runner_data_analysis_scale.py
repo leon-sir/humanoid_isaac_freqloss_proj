@@ -84,7 +84,7 @@ match PROFILE:
     case "freq_mimic":
         TASK_NAME = "FreqLab-Velocity-Flat-YMBOY21DOF-FreqMimic-V1"
         CHECK_POINT = (
-            "logs/rsl_rl/flat_21dof_freq_mimic/2026-09-13_20-05-11_freq_mimic_v1/model_5999.pt"
+            "logs/rsl_rl/flat_21dof_freq_mimic/2026-09-14_17-50-57_freq_mimic_v1_frequency_fit_both/model_11998.pt"
         )
         # The selected 002 reference motion averages about 0.94893 m/s forward.
         COMMAND_VEL = 0.9489283781915138

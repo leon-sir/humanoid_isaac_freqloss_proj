@@ -266,7 +266,15 @@ class CrossLimbPhaseMatch(_Phase):
 
 
 class KinematicChainPhaseMatch(_Phase):
-    """Match reference-f0 phase delays from each limb anchor to distal joints."""
+    """Match reference-f0 phase delays from each limb anchor to distal joints.
+
+    Both policy coefficients and reference phase targets are evaluated at the
+    fixed reference frequency (002: 0.9375 Hz), NOT the policy's estimated core
+    frequency. Frequency mismatch can therefore affect this phase measurement.
+    Alternative experiment: evaluate each chain at its core's estimated rhythm
+    and compare its dimensionless phase difference with the reference target.
+    That alternative is intentionally not implemented here.
+    """
 
     def __init__(self, cfg, env):
         super().__init__(cfg, env)

@@ -1,4 +1,4 @@
-# YMBOY 21DOF Frequency Mimic（训练架构）
+
 
 ## 切换参考数据
 
@@ -244,8 +244,6 @@ python scripts/rsl_rl/train.py \
 
 ```
 
-默认4096环境、6000 iterations；experiment 为 `flat_21dof_freq_mimic`，
-run_name 为 `freq_mimic_scaffold`，不与12DOF实验混用。
 
 ```bash
 python scripts/rsl_rl/train.py \
@@ -263,12 +261,6 @@ python scripts/rsl_rl/train.py \
   --checkpoint model_5999.pt
 ```
 
-`experiment_name=flat_21dof_freq_mimic` 已经确定父目录；`--load_run` 必须填写该
-目录下时间戳开头的run子目录（也支持正则），不能再次填写experiment名。
-V1只写 `--resume` 会按 `load_run=".*_freq_mimic_v1"` 和 `model_.*.pt` 选择最新V1 run
-及其中编号最大的checkpoint，避免误加载V0或time baseline。旧scaffold目录或自定义run_name
-需显式指定 `--load_run`。其他runner的默认匹配规则不变。
-
 ## Play
 
 ```bash
@@ -285,14 +277,42 @@ python scripts/rsl_rl/play.py \
 tensorboard --logdir logs/rsl_rl/flat_21dof_freq_mimic
 ```
 
-## 频谱生命周期检查
+
+# YMBOY 21DOF Frequency Mimic（训练架构）
+
+## V2
+
+V2组合4秒窗口、`(0.75,1.0) Hz`低门槛能量奖励和频率拟合惩罚（−1），开启固定参考f0的chain match（+0.1），保留20步too-short和弱非core约束，禁用额外踝限位项；V0/V1及`v1_tests.py`不变。
 
 ```bash
-python test/smoke_mimic_env.py --headless
+python scripts/rsl_rl/train.py \
+  --task FreqLab-Velocity-Flat-YMBOY21DOF-FreqMimic-V2 --headless --resume \
+  --load_run 2026-09-14_17-50-57_freq_mimic_v1_frequency_fit_both \
+  --checkpoint model_11998.pt
 ```
 
-此测试使用2环境，临时禁用 termination 以填满窗口，检查21维action、有限reward、
-频谱缓存和独立 reset；不改变生产配置。
+推荐以上Both checkpoint，也可显式指定原V1策略；`run_name=freq_mimic_v2`，experiment不变。
+只加`--resume`默认匹配`.*_freq_mimic_v1`，加载Both或继续V2时请显式指定`--load_run`。
+V2无论是否resume都启用上述奖励；resume仍保留Base的参考速度范围切换。
 
-已验证：4环境单次PPO迭代并保存checkpoint；2环境完整FFT窗口与独立reset测试；
-使用该checkpoint进行4步headless play并导出MP4。以上为架构冒烟测试，非收敛或步态质量验证。
+两种swap termination统一使用 `swap_time_threshold`（控制步数）：too-short默认20步（0.4秒），too-long当前200步（4秒），以50 Hz控制频率换算；too-short防抖参数保留为函数默认值，可按需覆盖。
+
+FrequencyFit/NarrowBand新增 `swap_time_too_short`：髋pitch大小关系带0.02 rad滞回交替，连续两次完整间隔小于0.4秒终止；首次交替只启动计时，standing/零指令禁用，reset清空状态，不修改原V1或too-long项。该指标不是脚接触事件，可能在频域窗口填满前终止快步态，训练时需监测该终止率。
+
+`V1-FrequencyFit` 保留2秒窗口并增加core时域拟合频率范围惩罚，`V1-NarrowBand` 使用4秒窗口和 `(0.75,1.0) Hz` 能量频带，两者均从V1策略resume、保留速度切换但关闭chain及额外踝限位整定。
+play 用"scripts/collector/collect_runner_data_analysis_scale.py"脚本
+
+```bash
+python scripts/rsl_rl/train.py \
+  --task FreqLab-Velocity-Flat-YMBOY21DOF-FreqMimic-V1  --headless
+
+python scripts/rsl_rl/train.py \
+  --task FreqLab-Velocity-Flat-YMBOY21DOF-FreqMimic-V1-FrequencyFit --headless --resume \
+  --load_run 2026-09-13_20-05-11_freq_mimic_v1 --checkpoint model_5999.pt && \
+python scripts/rsl_rl/train.py \
+  --task FreqLab-Velocity-Flat-YMBOY21DOF-FreqMimic-V1-NarrowBand --headless --resume \
+  --load_run 2026-09-13_20-05-11_freq_mimic_v1 --checkpoint model_5999.pt
+
+
+
+```

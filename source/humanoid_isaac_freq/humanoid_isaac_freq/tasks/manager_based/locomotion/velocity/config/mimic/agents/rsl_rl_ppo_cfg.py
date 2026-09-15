@@ -76,3 +76,20 @@ class YMBOY21DOFMimicV1PPORunnerCfg(YMBOY21DOFMimicPPORunnerCfg):
 
     run_name = "freq_mimic_v1"
     load_run = ".*_freq_mimic_v1"
+
+
+@configclass
+class YMBOY21DOFMimicFrequencyFitPPORunnerCfg(YMBOY21DOFMimicV1PPORunnerCfg):
+    run_name = "freq_mimic_v1_frequency_fit"
+
+
+@configclass
+class YMBOY21DOFMimicNarrowBandPPORunnerCfg(YMBOY21DOFMimicV1PPORunnerCfg):
+    run_name = "freq_mimic_v1_narrow_band"
+
+
+@configclass
+class YMBOY21DOFMimicV2PPORunnerCfg(YMBOY21DOFMimicV1PPORunnerCfg):
+    """Same network/experiment; default resume selection remains original V1 runs."""
+
+    run_name = "freq_mimic_v2"

@@ -10,7 +10,48 @@
             "windows": {
                 "command": "${input:isaac_path}/python.bat ${workspaceFolder}/.vscode/tools/setup_vscode.py --isaac_path ${input:isaac_path}"
             }
-        }
+        },
+        {
+            "label": "Train FrequencyFit",
+            "type": "shell",
+            "command": "/home/ps/anaconda3/bin/conda",
+            "args": [
+                "run", "--no-capture-output", "-n", "env_isaaclab_v23",
+                "python", "scripts/rsl_rl/train.py",
+                "--task", "FreqLab-Velocity-Flat-YMBOY21DOF-FreqMimic-V1-FrequencyFit",
+                "--headless", "--resume",
+                "--load_run", "2026-09-13_20-05-11_freq_mimic_v1",
+                "--checkpoint", "model_5999.pt",
+                "--max_iterations", "3000",
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        },
+        {
+            "label": "Train NarrowBand",
+            "type": "shell",
+            "command": "/home/ps/anaconda3/bin/conda",
+            "args": [
+                "run", "--no-capture-output", "-n", "env_isaaclab_v23",
+                "python", "scripts/rsl_rl/train.py",
+                "--task", "FreqLab-Velocity-Flat-YMBOY21DOF-FreqMimic-V1-NarrowBand",
+                "--headless", "--resume",
+                "--load_run", "2026-09-13_20-05-11_freq_mimic_v1",
+                "--checkpoint", "model_5999.pt",
+                "--max_iterations", "3000",
+            ],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        },
+        {
+            "label": "Train Both Sequentially",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Train FrequencyFit",
+                "Train NarrowBand"
+            ],
+            "problemMatcher": []
+        },
     ],
     "inputs": [
         {
